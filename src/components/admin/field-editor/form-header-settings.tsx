@@ -246,15 +246,6 @@ export function FormHeaderSettings({
               Add cover
             </Button>
           )}
-          <Button
-            size="sm"
-            variant="tertiary"
-            className="bg-slate-100/80 hover:bg-slate-200/80 text-foreground font-medium rounded-lg px-3"
-            onPress={() => setIsCustomizeOpen(true)}
-          >
-            <Palette />
-            Customize
-          </Button>
         </div>
 
         {/* Large Inline Document Title */}

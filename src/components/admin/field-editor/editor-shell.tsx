@@ -63,20 +63,22 @@ export function EditorShell({
         onTitleChange={handleTitleChange}
         onTogglePublish={handleTogglePublish}
       />
-      <FormHeaderSettings
-        formId={form.id}
-        settings={settings}
-        title={title}
-        onSaveStatusChange={setSaveStatus}
-        onSettingsChange={setSettings}
-        onTitleChange={handleTitleChange}
-      />
-      <EditorCanvas
-        defaultSectionBackground={settings.section_defaults?.background}
-        formId={form.id}
-        initialFields={initialFields}
-        onSaveStatusChange={setSaveStatus}
-      />
+      <div className="flex flex-col gap-6 px-[10%]">
+        <FormHeaderSettings
+          formId={form.id}
+          settings={settings}
+          title={title}
+          onSaveStatusChange={setSaveStatus}
+          onSettingsChange={setSettings}
+          onTitleChange={handleTitleChange}
+        />
+        <EditorCanvas
+          defaultSectionBackground={settings.section_defaults?.background}
+          formId={form.id}
+          initialFields={initialFields}
+          onSaveStatusChange={setSaveStatus}
+        />
+      </div>
     </div>
   );
 }

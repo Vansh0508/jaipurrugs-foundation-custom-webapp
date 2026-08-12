@@ -4,39 +4,58 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Tabs } from "@heroui/react";
 
-const TABS = [
-  { key: "edit", label: "Edit", path: "edit" },
+const LEFT_TABS = [
+  { key: "metrics", label: "Insights", path: "metrics" },
   { key: "submissions", label: "Submissions", path: "submissions" },
-  { key: "metrics", label: "Metrics", path: "metrics" },
 ] as const;
 
-// Shared Edit/Submissions/Metrics tabs for a form — used by the editor's top
-// bar and by the (Phase 6) submissions/metrics placeholder pages. A Server
-// Component can't pass a `render` function prop into Tabs.Tab (a Client
-// Component), so this lives in its own client component — see
-// FormsStatusTabs for the same constraint.
+const RIGHT_TAB = { key: "edit", label: "Edit", path: "edit" } as const;
+
+const ALL_TABS = [...LEFT_TABS, RIGHT_TAB];
+
 export function FormNavTabs({ formId }: { formId: string }) {
   const pathname = usePathname();
-  const activeTab = TABS.find((tab) => pathname?.endsWith(`/${tab.path}`))?.key ?? "edit";
+  const activeTab = ALL_TABS.find((tab) => pathname?.endsWith(`/${tab.path}`))?.key ?? "edit";
 
   return (
-    <Tabs selectedKey={activeTab}>
-      <Tabs.ListContainer>
-        <Tabs.List aria-label="Form sections">
-          {TABS.map((tab) => (
+    <div className="flex w-full items-center justify-between">
+      {/* Left side tabs: Insights & Submissions */}
+      <Tabs selectedKey={activeTab}>
+        <Tabs.ListContainer>
+          <Tabs.List aria-label="Form insights and submissions">
+            {LEFT_TABS.map((tab) => (
+              <Tabs.Tab
+                key={tab.key}
+                href={`/forms/${formId}/${tab.path}`}
+                id={tab.key}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                render={(domProps: any) => <Link {...domProps} />}
+              >
+                {tab.label}
+                <Tabs.Indicator />
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
+        </Tabs.ListContainer>
+      </Tabs>
+
+      {/* Right side tab: Edit */}
+      <Tabs selectedKey={activeTab}>
+        <Tabs.ListContainer>
+          <Tabs.List aria-label="Form edit">
             <Tabs.Tab
-              key={tab.key}
-              href={`/forms/${formId}/${tab.path}`}
-              id={tab.key}
+              key={RIGHT_TAB.key}
+              href={`/forms/${formId}/${RIGHT_TAB.path}`}
+              id={RIGHT_TAB.key}
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               render={(domProps: any) => <Link {...domProps} />}
             >
-              {tab.label}
+              {RIGHT_TAB.label}
               <Tabs.Indicator />
             </Tabs.Tab>
-          ))}
-        </Tabs.List>
-      </Tabs.ListContainer>
-    </Tabs>
+          </Tabs.List>
+        </Tabs.ListContainer>
+      </Tabs>
+    </div>
   );
 }

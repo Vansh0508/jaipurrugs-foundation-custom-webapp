@@ -6,6 +6,7 @@ import {
   Button,
   Checkbox,
   CheckboxGroup,
+  DateField,
   Input,
   NumberField,
   Radio,
@@ -104,9 +105,11 @@ export function PublicFieldInput({
 
     case "date":
       return (
-        <TextField aria-label={field.label || "Date"} value={strValue} onChange={(v) => onChange(v)}>
-          <Input type="date" />
-        </TextField>
+        <DateField aria-label={field.label || "Date"}>
+          <DateField.Group>
+            <DateField.Input>{(segment) => <DateField.Segment segment={segment} />}</DateField.Input>
+          </DateField.Group>
+        </DateField>
       );
 
     case "multiple_choice": {

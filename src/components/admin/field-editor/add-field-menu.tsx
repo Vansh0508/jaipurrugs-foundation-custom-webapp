@@ -37,7 +37,7 @@ export function AddFieldDivider({ onSelect }: { onSelect: (type: FormFieldType) 
       <Dropdown>
         <Button
           aria-label="Add field here"
-          className="absolute opacity-40 shadow-sm transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+          className="absolute opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 focus-visible:opacity-100"
           isIconOnly
           size="sm"
           variant="secondary"

@@ -198,7 +198,7 @@ export function PublicFormRenderer({
         </div>
       ) : null}
 
-      <main className="mx-auto max-w-2xl px-4 py-8">
+      <main className="mx-auto max-w-3xl px-[10%] py-8">
         <div
           className="flex flex-col gap-6 rounded-3xl border border-border bg-white p-8 shadow-xs transition-all"
           style={pageContainerStyle}

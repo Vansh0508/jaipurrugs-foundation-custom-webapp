@@ -32,6 +32,11 @@ const optionSchema = z.object({
 });
 
 const emptyConfigSchema = z.object({}).strict();
+const textConfigSchema = z.object({
+  minChars: z.number().int().min(0).optional(),
+  maxChars: z.number().int().min(1).optional(),
+  defaultAnswer: z.string().optional(),
+});
 const choiceConfigSchema = z.object({ options: z.array(optionSchema) });
 const numberConfigSchema = z.object({
   min: z.number().optional(),
@@ -64,6 +69,7 @@ export const sectionConfigSchema = z.object({
 });
 
 export type EmptyConfig = z.infer<typeof emptyConfigSchema>;
+export type TextConfig = z.infer<typeof textConfigSchema>;
 export type ChoiceConfig = z.infer<typeof choiceConfigSchema>;
 export type NumberConfig = z.infer<typeof numberConfigSchema>;
 export type RatingConfig = z.infer<typeof ratingConfigSchema>;
@@ -126,7 +132,7 @@ export const FIELD_TYPE_DEFINITIONS = {
     supportsRequired: true,
     supportsPlaceholder: true,
     isSection: false,
-    configSchema: emptyConfigSchema,
+    configSchema: textConfigSchema,
     defaultConfig: () => ({}),
   },
   long_text: {
@@ -137,7 +143,7 @@ export const FIELD_TYPE_DEFINITIONS = {
     supportsRequired: true,
     supportsPlaceholder: true,
     isSection: false,
-    configSchema: emptyConfigSchema,
+    configSchema: textConfigSchema,
     defaultConfig: () => ({}),
   },
   number: {
