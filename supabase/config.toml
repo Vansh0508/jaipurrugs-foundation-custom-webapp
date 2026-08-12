@@ -1,0 +1,3 @@
+# Placeholder — Supabase project this app targets. Auth hook registration (before-user-created
+# whitelist enforcement) and provider config are added in Phase 1 — see docs/phases/01-auth-whitelist.md.
+project_id = "eevzwnjjcedyuehpprgk"
