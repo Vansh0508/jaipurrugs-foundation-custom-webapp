@@ -47,7 +47,17 @@ export function PublicFormRenderer({
     const storageKey = `form_submitter_token_${form.id}`;
     let token = localStorage.getItem(storageKey);
     if (!token) {
-      token = crypto.randomUUID();
+      // crypto.randomUUID() requires a secure context (HTTPS or localhost) and is
+      // unavailable on plain HTTP hosts -- fall back to a Math.random()-based
+      // UUID v4, which is fine for a client-side dedup token (not security-critical).
+      token =
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+              const r = (Math.random() * 16) | 0;
+              const v = c === "x" ? r : (r & 0x3) | 0x8;
+              return v.toString(16);
+            });
       localStorage.setItem(storageKey, token);
     }
     setSubmitterToken(token);

@@ -34,7 +34,22 @@ export function EditorTopBar({
 
   async function handleCopyLink() {
     try {
-      await navigator.clipboard.writeText(publicUrl);
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(publicUrl);
+      } else {
+        // Clipboard API is unavailable on non-secure origins (plain HTTP on a
+        // non-localhost host) -- fall back to the legacy execCommand approach.
+        const textarea = document.createElement("textarea");
+        textarea.value = publicUrl;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(textarea);
+        if (!ok) throw new Error("execCommand copy failed");
+      }
       toast.success("Link copied");
     } catch {
       toast.danger("Couldn't copy the link");
