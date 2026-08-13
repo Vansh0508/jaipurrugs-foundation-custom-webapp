@@ -10,6 +10,15 @@ const STATUS_COLOR = {
   archived: "warning",
 } as const;
 
+function formatDate(dateStr: string) {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "—";
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function FormsTable({ forms }: { forms: FormRow[] }) {
   if (forms.length === 0) {
     return (
@@ -27,7 +36,6 @@ export function FormsTable({ forms }: { forms: FormRow[] }) {
           <Table.Header>
             <Table.Column isRowHeader>Title</Table.Column>
             <Table.Column>Status</Table.Column>
-            <Table.Column>Slug</Table.Column>
             <Table.Column>Last updated</Table.Column>
           </Table.Header>
           <Table.Body>
@@ -43,9 +51,8 @@ export function FormsTable({ forms }: { forms: FormRow[] }) {
                     {form.status}
                   </Chip>
                 </Table.Cell>
-                <Table.Cell className="text-muted">{form.slug}</Table.Cell>
                 <Table.Cell className="text-muted">
-                  {new Date(form.updated_at).toLocaleDateString()}
+                  {formatDate(form.updated_at)}
                 </Table.Cell>
               </Table.Row>
             ))}
