@@ -43,7 +43,11 @@ const numberConfigSchema = z.object({
   max: z.number().optional(),
   step: z.number().optional(),
 });
-const ratingConfigSchema = z.object({ max: z.number().int().min(2).max(10) });
+const ratingConfigSchema = z.object({
+  max: z.number().int().min(2).max(10).optional(),
+  min: z.number().int().min(0).max(1).optional(),
+  style: z.enum(["stars", "numbers"]).optional(),
+});
 const linearScaleConfigSchema = z.object({
   min: z.number().int(),
   max: z.number().int(),

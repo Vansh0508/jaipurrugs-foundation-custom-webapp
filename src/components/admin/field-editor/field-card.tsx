@@ -415,10 +415,32 @@ function FieldEditorPreview({
     }
 
     case "rating": {
-      const maxStars = (config.max as number) ?? 5;
+      const maxVal = (config.max as number) ?? 5;
+      const minVal = (config.min as number) ?? 1;
+      const style = (config.style as string) ?? (maxVal > 5 || minVal === 0 ? "numbers" : "stars");
+
+      if (style === "numbers") {
+        const countItems = [];
+        for (let i = minVal; i <= maxVal; i++) {
+          countItems.push(i);
+        }
+        return (
+          <div className="flex flex-wrap items-center gap-1.5 py-1">
+            {countItems.map((num) => (
+              <span
+                key={num}
+                className="flex h-9 min-w-9 items-center justify-center rounded-xl border border-border bg-slate-50 text-xs font-semibold text-foreground px-2.5"
+              >
+                {num}
+              </span>
+            ))}
+          </div>
+        );
+      }
+
       return (
         <div className="flex items-center gap-1 py-1">
-          {Array.from({ length: maxStars }).map((_, idx) => (
+          {Array.from({ length: maxVal }).map((_, idx) => (
             <Star key={idx} className="size-5 text-slate-300 fill-current" />
           ))}
         </div>

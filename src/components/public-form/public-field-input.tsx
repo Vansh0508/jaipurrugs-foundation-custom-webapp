@@ -173,13 +173,46 @@ export function PublicFieldInput({
 
     case "rating": {
       const config = (field.config as RatingConfig) ?? {};
-      const maxStars = config.max ?? 5;
-      const currentRating = typeof value === "number" ? value : 0;
+      const maxVal = config.max ?? 5;
+      const minVal = config.min ?? 1;
+      const style = config.style ?? (maxVal > 5 || minVal === 0 ? "numbers" : "stars");
+      const currentRating = typeof value === "number" ? value : null;
+
+      if (style === "numbers") {
+        const countItems = [];
+        for (let i = minVal; i <= maxVal; i++) {
+          countItems.push(i);
+        }
+
+        return (
+          <div className="flex flex-wrap items-center gap-1.5 py-1">
+            {countItems.map((num) => {
+              const isSelected = currentRating === num;
+              return (
+                <button
+                  key={num}
+                  type="button"
+                  aria-label={`Rate ${num}`}
+                  className={`flex h-10 min-w-10 items-center justify-center rounded-xl border text-sm font-semibold transition-all px-3 ${
+                    isSelected
+                      ? "border-accent bg-accent text-white shadow-xs"
+                      : "border-border bg-white text-foreground hover:border-accent/60 hover:bg-slate-50"
+                  }`}
+                  onClick={() => onChange(num)}
+                >
+                  {num}
+                </button>
+              );
+            })}
+          </div>
+        );
+      }
+
       return (
         <div className="flex items-center gap-1.5 py-1">
-          {Array.from({ length: maxStars }).map((_, idx) => {
+          {Array.from({ length: maxVal }).map((_, idx) => {
             const starValue = idx + 1;
-            const isFilled = starValue <= currentRating;
+            const isFilled = currentRating !== null && starValue <= currentRating;
             return (
               <button
                 key={starValue}

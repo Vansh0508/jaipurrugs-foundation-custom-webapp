@@ -176,21 +176,66 @@ function RatingConfigEditor({
   config: RatingConfig;
   onConfigChange: (config: Record<string, unknown>, options?: ConfigChangeOptions) => void;
 }) {
+  const minVal = config?.min ?? 1;
+  const maxVal = config?.max ?? 5;
+  const styleVal = config?.style ?? (maxVal > 5 || minVal === 0 ? "numbers" : "stars");
+
   return (
-    <NumberField
-      className="w-28"
-      maxValue={10}
-      minValue={2}
-      value={config?.max ?? 5}
-      onChange={(value) => onConfigChange({ max: value ?? 5 }, { immediate: true })}
-    >
-      <Label>Max stars</Label>
-      <NumberField.Group>
-        <NumberField.DecrementButton />
-        <NumberField.Input />
-        <NumberField.IncrementButton />
-      </NumberField.Group>
-    </NumberField>
+    <div className="flex flex-wrap items-center gap-4">
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs font-semibold">Rating Style</Label>
+        <div className="flex items-center rounded-xl border border-border bg-slate-100/60 p-0.5 text-xs font-medium">
+          <button
+            type="button"
+            className={`rounded-lg px-3 py-1.5 transition-all ${
+              styleVal === "numbers" ? "bg-white text-foreground shadow-xs font-semibold" : "text-muted hover:text-foreground"
+            }`}
+            onClick={() => onConfigChange({ ...config, style: "numbers" }, { immediate: true })}
+          >
+            Numbers (0–10)
+          </button>
+          <button
+            type="button"
+            className={`rounded-lg px-3 py-1.5 transition-all ${
+              styleVal === "stars" ? "bg-white text-foreground shadow-xs font-semibold" : "text-muted hover:text-foreground"
+            }`}
+            onClick={() => onConfigChange({ ...config, style: "stars" }, { immediate: true })}
+          >
+            Stars
+          </button>
+        </div>
+      </div>
+
+      <NumberField
+        className="w-28"
+        maxValue={1}
+        minValue={0}
+        value={minVal}
+        onChange={(value) => onConfigChange({ ...config, min: value ?? 0 }, { immediate: true })}
+      >
+        <Label>Min value</Label>
+        <NumberField.Group>
+          <NumberField.DecrementButton />
+          <NumberField.Input />
+          <NumberField.IncrementButton />
+        </NumberField.Group>
+      </NumberField>
+
+      <NumberField
+        className="w-28"
+        maxValue={10}
+        minValue={2}
+        value={maxVal}
+        onChange={(value) => onConfigChange({ ...config, max: value ?? 10 }, { immediate: true })}
+      >
+        <Label>Max value</Label>
+        <NumberField.Group>
+          <NumberField.DecrementButton />
+          <NumberField.Input />
+          <NumberField.IncrementButton />
+        </NumberField.Group>
+      </NumberField>
+    </div>
   );
 }
 
