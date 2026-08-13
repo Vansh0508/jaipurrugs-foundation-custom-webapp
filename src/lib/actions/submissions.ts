@@ -2,7 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { Json } from "@/lib/types/supabase";
+import { requireActiveTeamMember } from "@/lib/auth/session";
+import type { Json, Tables } from "@/lib/types/supabase";
 
 export type AnswerInput = {
   field_id: string;
@@ -48,7 +49,6 @@ export async function getPublicFormByShareToken(shareToken: string) {
 export async function getOrCreateSubmission(formId: string, submitterToken: string) {
   const supabase = await createClient();
 
-  // Try to find existing submission
   const { data: existing } = await supabase
     .from("form_submissions")
     .select("id, status, submitter_token, completed_at")
@@ -57,7 +57,6 @@ export async function getOrCreateSubmission(formId: string, submitterToken: stri
     .maybeSingle();
 
   if (existing) {
-    // Fetch existing answers for progressive resume
     const { data: answers } = await supabase
       .from("form_answers")
       .select("field_id, value")
@@ -69,7 +68,6 @@ export async function getOrCreateSubmission(formId: string, submitterToken: stri
     };
   }
 
-  // Create new in_progress submission
   const { data: created, error } = await supabase
     .from("form_submissions")
     .insert({
@@ -99,7 +97,6 @@ export async function saveProgressiveAnswers(
 
   const supabase = await createClient();
 
-  // Validate submission belongs to submitterToken
   const { data: submission } = await supabase
     .from("form_submissions")
     .select("id")
@@ -186,5 +183,268 @@ export async function uploadSubmissionFile(
     path: storagePath,
     size: file.size,
     type: file.type,
+  };
+}
+
+/* ==========================================================================
+   Admin Submissions & Metrics Actions (Phase 6)
+   ========================================================================== */
+
+export async function getFormSubmissions(
+  formId: string,
+  options: {
+    page?: number;
+    limit?: number;
+    status?: "all" | "completed" | "in_progress";
+    search?: string;
+  } = {},
+) {
+  await requireActiveTeamMember();
+  const supabase = await createClient();
+
+  const page = options.page ?? 1;
+  const limit = options.limit ?? 25;
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+
+  // Query submissions count
+  let countQuery = supabase
+    .from("form_submissions")
+    .select("id", { count: "exact", head: true })
+    .eq("form_id", formId);
+
+  if (options.status && options.status !== "all") {
+    countQuery = countQuery.eq("status", options.status);
+  }
+
+  if (options.search) {
+    countQuery = countQuery.ilike("submitter_token", `%${options.search}%`);
+  }
+
+  const { count } = await countQuery;
+
+  // Query paginated submissions
+  let query = supabase
+    .from("form_submissions")
+    .select(`
+      id,
+      form_id,
+      submitter_token,
+      status,
+      completed_at,
+      created_at,
+      form_answers (
+        id,
+        field_id,
+        value,
+        field_snapshot,
+        created_at
+      )
+    `)
+    .eq("form_id", formId)
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (options.status && options.status !== "all") {
+    query = query.eq("status", options.status);
+  }
+
+  if (options.search) {
+    query = query.ilike("submitter_token", `%${options.search}%`);
+  }
+
+  const { data: submissions, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  // Fetch form fields for column mapping
+  const { data: fields } = await supabase
+    .from("form_fields")
+    .select("id, label, type, position")
+    .eq("form_id", formId)
+    .is("deleted_at", null)
+    .order("position", { ascending: true });
+
+  return {
+    submissions: (submissions ?? []).map((s) => ({ ...s, started_at: s.created_at })),
+    fields: fields ?? [],
+    total: count ?? 0,
+    page,
+    totalPages: Math.ceil((count ?? 0) / limit),
+  };
+}
+
+export async function getSignedUploadUrl(filePath: string) {
+  await requireActiveTeamMember();
+  const adminSupabase = createAdminClient();
+
+  const { data, error } = await adminSupabase.storage
+    .from("form-uploads")
+    .createSignedUrl(filePath, 3600); // 1 hour valid signed URL
+
+  if (error || !data) {
+    throw new Error(error?.message || "Failed to generate download URL");
+  }
+
+  return data.signedUrl;
+}
+
+export async function exportSubmissionsCsv(formId: string) {
+  await requireActiveTeamMember();
+  const supabase = await createClient();
+
+  const { data: form } = await supabase
+    .from("forms")
+    .select("title")
+    .eq("id", formId)
+    .single();
+
+  const { data: fields } = await supabase
+    .from("form_fields")
+    .select("id, label, type")
+    .eq("form_id", formId)
+    .is("deleted_at", null)
+    .order("position", { ascending: true });
+
+  const activeFields = (fields ?? []).filter((f) => f.type !== "section");
+
+  const { data: submissions } = await supabase
+    .from("form_submissions")
+    .select(`
+      id,
+      submitter_token,
+      status,
+      completed_at,
+      created_at,
+      form_answers (
+        field_id,
+        value,
+        field_snapshot
+      )
+    `)
+    .eq("form_id", formId)
+    .eq("status", "completed")
+    .order("completed_at", { ascending: false });
+
+  // Helper to escape CSV fields
+  const escapeCsv = (val: string | number | boolean | null | undefined) => {
+    if (val === null || val === undefined) return '""';
+    const str = String(val);
+    if (str.includes('"') || str.includes(",") || str.includes("\n")) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return `"${str}"`;
+  };
+
+  // Header row
+  const headers = [
+    "Submission ID",
+    "Submitter Token",
+    "Status",
+    "Started At",
+    "Completed At",
+    ...activeFields.map((f) => f.label || "Untitled Field"),
+  ];
+
+  const rows = [headers.map(escapeCsv).join(",")];
+
+  // Data rows
+  for (const sub of submissions ?? []) {
+    const answerMap = new Map<string, unknown>();
+    for (const ans of sub.form_answers ?? []) {
+      answerMap.set(ans.field_id, ans.value);
+    }
+
+    const row = [
+      sub.id,
+      sub.submitter_token,
+      sub.status,
+      sub.created_at,
+      sub.completed_at ?? "",
+      ...activeFields.map((field) => {
+        const rawVal = answerMap.get(field.id);
+        if (rawVal === undefined || rawVal === null) return "";
+        if (typeof rawVal === "object") {
+          if (Array.isArray(rawVal)) return rawVal.join("; ");
+          return JSON.stringify(rawVal);
+        }
+        return String(rawVal);
+      }),
+    ];
+
+    rows.push(row.map(escapeCsv).join(","));
+  }
+
+  return {
+    filename: `${(form?.title || "form").toLowerCase().replace(/[^a-z0-9]/g, "-")}-submissions.csv`,
+    content: rows.join("\n"),
+  };
+}
+
+export async function getFormMetricsData(formId: string) {
+  await requireActiveTeamMember();
+  const supabase = await createClient();
+
+  const { data: form } = await supabase
+    .from("forms")
+    .select("id, title, status, settings")
+    .eq("id", formId)
+    .single();
+
+  const { data: fields } = await supabase
+    .from("form_fields")
+    .select("*")
+    .eq("form_id", formId)
+    .is("deleted_at", null)
+    .order("position", { ascending: true });
+
+  const { data: submissions } = await supabase
+    .from("form_submissions")
+    .select("id, status, created_at, completed_at")
+    .eq("form_id", formId);
+
+  const { data: answers } = await supabase
+    .from("form_answers")
+    .select("id, submission_id, field_id, value, field_snapshot, created_at")
+    .in("submission_id", (submissions ?? []).map((s) => s.id));
+
+  const totalSubmissions = submissions?.length ?? 0;
+  const completedSubmissions = (submissions ?? []).filter((s) => s.status === "completed");
+  const inProgressSubmissions = (submissions ?? []).filter((s) => s.status === "in_progress");
+  const completedCount = completedSubmissions.length;
+  const completionRate = totalSubmissions > 0 ? Math.round((completedCount / totalSubmissions) * 100) : 0;
+
+  // Average Completion Time (in seconds)
+  let totalTimeSeconds = 0;
+  let timedCount = 0;
+
+  for (const sub of completedSubmissions) {
+    if (sub.created_at && sub.completed_at) {
+      const start = new Date(sub.created_at).getTime();
+      const end = new Date(sub.completed_at).getTime();
+      const duration = (end - start) / 1000;
+      if (duration > 0 && duration < 86400) {
+        totalTimeSeconds += duration;
+        timedCount++;
+      }
+    }
+  }
+
+  const avgCompletionTimeSeconds = timedCount > 0 ? Math.round(totalTimeSeconds / timedCount) : 0;
+
+  return {
+    form,
+    fields: fields ?? [],
+    summary: {
+      totalSubmissions,
+      completedCount,
+      inProgressCount: inProgressSubmissions.length,
+      completionRate,
+      avgCompletionTimeSeconds,
+    },
+    submissions: (submissions ?? []).map((s) => ({ ...s, started_at: s.created_at })),
+    answers: answers ?? [],
   };
 }

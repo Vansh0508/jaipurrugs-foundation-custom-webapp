@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { Tabs } from "@heroui/react";
 import type { Enums } from "@/lib/types/supabase";
 
 type StatusFilter = Enums<"form_status"> | "all";
@@ -21,29 +20,27 @@ function buildHref(status: StatusFilter, q: string | undefined) {
   return query ? `/forms?${query}` : "/forms";
 }
 
-// A Server Component can't pass a `render` function prop into this Client
-// Component (functions aren't serializable across the RSC boundary), so the
-// Tabs.Tab render-function closures are built here instead — see the 500 this
-// caused when Tabs lived directly in app/(admin)/forms/page.tsx.
 export function FormsStatusTabs({ status, q }: { status: StatusFilter; q?: string }) {
   return (
-    <Tabs selectedKey={status}>
-      <Tabs.ListContainer>
-        <Tabs.List aria-label="Filter by status">
-          {STATUS_TABS.map((tab) => (
-            <Tabs.Tab
+    <div className="border-b border-border/60">
+      <nav aria-label="Filter forms by status" className="-mb-px flex items-center gap-6">
+        {STATUS_TABS.map((tab) => {
+          const isActive = status === tab.key;
+          return (
+            <Link
               key={tab.key}
               href={buildHref(tab.key, q)}
-              id={tab.key}
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              render={(domProps: any) => <Link {...domProps} />}
+              className={`inline-flex items-center border-b-2 py-2.5 text-sm transition-colors ${
+                isActive
+                  ? "border-accent font-semibold text-foreground"
+                  : "border-transparent font-medium text-muted hover:border-border/80 hover:text-foreground"
+              }`}
             >
               {tab.label}
-              <Tabs.Indicator />
-            </Tabs.Tab>
-          ))}
-        </Tabs.List>
-      </Tabs.ListContainer>
-    </Tabs>
+            </Link>
+          );
+        })}
+      </nav>
+    </div>
   );
 }
