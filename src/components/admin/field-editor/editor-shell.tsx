@@ -9,6 +9,7 @@ import { EditorCanvas } from "./editor-canvas";
 import type { FieldRow } from "./field-card";
 import { EditorTopBar } from "./editor-topbar";
 import { FormHeaderSettings } from "./form-header-settings";
+import { FormFooterSettings } from "./form-footer-settings";
 
 const TITLE_DEBOUNCE_MS = 900;
 
@@ -63,7 +64,7 @@ export function EditorShell({
         onTitleChange={handleTitleChange}
         onTogglePublish={handleTogglePublish}
       />
-      <div className="flex flex-col gap-6 px-[10%]">
+      <div className="flex flex-col gap-6 px-[10%] pt-2 pb-12">
         <FormHeaderSettings
           formId={form.id}
           settings={settings}
@@ -77,6 +78,12 @@ export function EditorShell({
           formId={form.id}
           initialFields={initialFields}
           onSaveStatusChange={setSaveStatus}
+        />
+        <FormFooterSettings
+          formId={form.id}
+          settings={settings}
+          onSaveStatusChange={setSaveStatus}
+          onSettingsChange={setSettings}
         />
       </div>
     </div>

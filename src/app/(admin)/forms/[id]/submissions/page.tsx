@@ -32,7 +32,7 @@ export default async function FormSubmissionsPage({
   const initialData = await getFormSubmissions(form.id, { page: 1, limit: 25 });
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 p-8">
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-semibold">{form.title}</h1>

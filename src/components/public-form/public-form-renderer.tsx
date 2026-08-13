@@ -195,18 +195,28 @@ export function PublicFormRenderer({
     pageContainerStyle.backgroundPosition = "center";
   }
 
+  const footerUrl = settings.footer_image_url ?? null;
+  const coverPositionY = settings.cover_position_y ?? 50;
+  const footerPositionY = settings.footer_position_y ?? 50;
+
   const isLastPage = currentPageIndex === pages.length - 1;
   const progressPercent = Math.round(((currentPageIndex + 1) / pages.length) * 100);
 
   return (
-    <div className="min-h-screen bg-white text-foreground" style={pageContainerStyle}>
-      {/* Cover Image Banner */}
-      {coverUrl ? (
-        <div className="h-56 sm:h-64 md:h-72 w-full overflow-hidden bg-slate-100">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img alt="Form cover" className="h-full w-full object-cover" src={coverUrl} />
-        </div>
-      ) : null}
+    <div className="min-h-screen bg-white text-foreground flex flex-col justify-between" style={pageContainerStyle}>
+      <div className="flex flex-col">
+        {/* Cover Image Banner */}
+        {coverUrl ? (
+          <div className="h-56 sm:h-64 md:h-72 w-full overflow-hidden bg-slate-100">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              alt="Form cover"
+              className="h-full w-full object-cover"
+              src={coverUrl}
+              style={{ objectPosition: `50% ${coverPositionY}%` }}
+            />
+          </div>
+        ) : null}
 
       <main className="w-full max-w-4xl mx-auto px-6 sm:px-12 md:px-16 py-8 md:py-12">
         <div className="flex flex-col gap-8 transition-all">
@@ -318,6 +328,20 @@ export function PublicFormRenderer({
           </div>
         </div>
       </main>
+      </div>
+
+      {/* Full Width Footer Image Banner */}
+      {footerUrl ? (
+        <div className="h-44 sm:h-52 md:h-60 w-full overflow-hidden bg-slate-100 mt-12">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            alt="Form footer"
+            className="h-full w-full object-cover"
+            src={footerUrl}
+            style={{ objectPosition: `50% ${footerPositionY}%` }}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

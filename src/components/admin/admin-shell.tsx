@@ -108,7 +108,7 @@ export function AdminShell({ email, children }: { email: string; children: React
         </Dropdown>
       </aside>
 
-      <main className="h-full flex-1 overflow-y-auto rounded-2xl bg-white p-8 shadow-[12px_0_32px_-8px_rgba(0,0,0,0.06),-12px_0_32px_-8px_rgba(0,0,0,0.06)]">
+      <main className="h-full flex-1 overflow-y-auto rounded-2xl bg-white p-8 shadow-[12px_0_32px_-8px_rgba(0,0,0,0.06),-12px_0_32px_-8px_rgba(0,0,0,0.06)] has-[.sticky]:p-0">
         {children}
       </main>
     </div>

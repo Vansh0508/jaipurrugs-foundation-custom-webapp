@@ -255,7 +255,7 @@ export async function updateFormSettings(formId: string, settingsPatch: Partial<
 
 export async function uploadFormAsset(
   formId: string,
-  assetType: "logo" | "cover" | "section",
+  assetType: "logo" | "cover" | "footer" | "section",
   sectionFieldId: string | null,
   formData: FormData,
 ): Promise<string> {
@@ -274,6 +274,8 @@ export async function uploadFormAsset(
     storagePath = `forms/${formId}/logo/${uniqueName}`;
   } else if (assetType === "cover") {
     storagePath = `forms/${formId}/cover/${uniqueName}`;
+  } else if (assetType === "footer") {
+    storagePath = `forms/${formId}/footer/${uniqueName}`;
   } else if (assetType === "section" && sectionFieldId) {
     storagePath = `forms/${formId}/sections/${sectionFieldId}/${uniqueName}`;
   } else {

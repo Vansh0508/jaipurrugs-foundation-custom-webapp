@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ArrowUpFromLine, LayoutHeader, Palette, Picture, TrashBin } from "@gravity-ui/icons";
+import { ArrowUpFromLine, LayoutHeader, Picture, Sliders, TrashBin } from "@gravity-ui/icons";
 import {
   Button,
   Input,
@@ -42,13 +42,21 @@ export function FormHeaderSettings({
 }) {
   const [isUploading, setIsUploading] = useState<string | null>(null);
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
+  const [isRepositioningCover, setIsRepositioningCover] = useState(false);
+  const [isRepositioningFooter, setIsRepositioningFooter] = useState(false);
 
   const logoInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const footerInputRef = useRef<HTMLInputElement>(null);
   const defaultBgImageInputRef = useRef<HTMLInputElement>(null);
 
   const logoUrl = settings.logo_url ?? null;
   const coverUrl = settings.cover_image_url ?? null;
+  const footerUrl = settings.footer_image_url ?? null;
+
+  const coverPositionY = settings.cover_position_y ?? 50;
+  const footerPositionY = settings.footer_position_y ?? 50;
+
   const defaultBg = settings.section_defaults?.background ?? {};
 
   async function handleSaveSettings(patch: Partial<FormSettings>) {
@@ -77,7 +85,7 @@ export function FormHeaderSettings({
 
   async function handleFileUpload(
     event: React.ChangeEvent<HTMLInputElement>,
-    assetType: "logo" | "cover" | "section_default",
+    assetType: "logo" | "cover" | "footer" | "section_default",
   ) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -100,7 +108,9 @@ export function FormHeaderSettings({
       if (assetType === "logo") {
         await handleSaveSettings({ logo_url: uploadedUrl });
       } else if (assetType === "cover") {
-        await handleSaveSettings({ cover_image_url: uploadedUrl });
+        await handleSaveSettings({ cover_image_url: uploadedUrl, cover_position_y: 50 });
+      } else if (assetType === "footer") {
+        await handleSaveSettings({ footer_image_url: uploadedUrl, footer_position_y: 50 });
       } else if (assetType === "section_default") {
         await handleSaveSettings({
           section_defaults: {
@@ -129,7 +139,16 @@ export function FormHeaderSettings({
     if (coverUrl) {
       deleteFormAsset(coverUrl);
     }
-    await handleSaveSettings({ cover_image_url: null });
+    await handleSaveSettings({ cover_image_url: null, cover_position_y: null });
+    setIsRepositioningCover(false);
+  }
+
+  async function handleRemoveFooter() {
+    if (footerUrl) {
+      deleteFormAsset(footerUrl);
+    }
+    await handleSaveSettings({ footer_image_url: null, footer_position_y: null });
+    setIsRepositioningFooter(false);
   }
 
   function handleDefaultBgTypeChange(type: "none" | "color" | "image") {
@@ -161,13 +180,38 @@ export function FormHeaderSettings({
         type="file"
         onChange={(e) => handleFileUpload(e, "cover")}
       />
+      <input
+        ref={footerInputRef}
+        accept="image/*"
+        className="hidden"
+        type="file"
+        onChange={(e) => handleFileUpload(e, "footer")}
+      />
 
       {/* Cover Image Banner (Tally Style) */}
       {coverUrl ? (
         <div className="group relative h-48 w-full overflow-hidden rounded-2xl border border-border bg-slate-100 shadow-xs">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img alt="Form cover banner" className="h-full w-full object-cover" src={coverUrl} />
+          <img
+            alt="Form cover banner"
+            className="h-full w-full object-cover transition-all"
+            src={coverUrl}
+            style={{ objectPosition: `50% ${coverPositionY}%` }}
+          />
+
+          {/* Action Overlay */}
           <div className="absolute top-3 right-3 flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+            <Button
+              size="sm"
+              variant="tertiary"
+              className={`shadow-xs backdrop-blur-xs ${
+                isRepositioningCover ? "bg-accent text-white hover:bg-accent/90" : "bg-white/90 text-foreground hover:bg-white"
+              }`}
+              onPress={() => setIsRepositioningCover((prev) => !prev)}
+            >
+              <Sliders className="size-4" />
+              Reposition
+            </Button>
             <Button
               isDisabled={isUploading === "cover"}
               size="sm"
@@ -187,6 +231,62 @@ export function FormHeaderSettings({
               <TrashBin />
             </Button>
           </div>
+
+          {/* Ideal dimensions badge on hover */}
+          <div className="absolute bottom-2 right-3 opacity-0 transition-opacity group-hover:opacity-100 pointer-events-none">
+            <span className="rounded-md bg-black/75 px-2 py-1 text-[10px] font-medium text-white shadow-xs backdrop-blur-xs">
+              Ideal: 1500 × 400 px
+            </span>
+          </div>
+
+          {/* Inline Repositioning Controls */}
+          {isRepositioningCover && (
+            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-3 rounded-xl bg-slate-900/90 p-3 text-xs text-white backdrop-blur-md shadow-lg animate-in fade-in slide-in-from-bottom-2">
+              <span className="font-semibold shrink-0">Vertical Position:</span>
+              <div className="flex items-center gap-2 flex-1 max-w-xs">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={coverPositionY}
+                  className="w-full accent-accent h-1.5 bg-slate-700 rounded-lg cursor-pointer"
+                  onChange={(e) => handleSaveSettings({ cover_position_y: Number(e.target.value) })}
+                />
+                <span className="font-mono text-[11px] w-8 text-right">{coverPositionY}%</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  className="rounded px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[11px] font-medium"
+                  onClick={() => handleSaveSettings({ cover_position_y: 0 })}
+                >
+                  Top
+                </button>
+                <button
+                  type="button"
+                  className="rounded px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[11px] font-medium"
+                  onClick={() => handleSaveSettings({ cover_position_y: 50 })}
+                >
+                  Center
+                </button>
+                <button
+                  type="button"
+                  className="rounded px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[11px] font-medium"
+                  onClick={() => handleSaveSettings({ cover_position_y: 100 })}
+                >
+                  Bottom
+                </button>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  className="ml-2 h-7 text-xs px-2.5"
+                  onPress={() => setIsRepositioningCover(false)}
+                >
+                  Save
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       ) : null}
 
@@ -217,10 +317,16 @@ export function FormHeaderSettings({
                 <TrashBin />
               </Button>
             </div>
+            {/* Ideal dimensions badge on hover */}
+            <div className="absolute bottom-1 right-1 opacity-0 transition-opacity group-hover:opacity-100 pointer-events-none">
+              <span className="rounded bg-black/80 px-1 py-0.5 text-[9px] font-medium text-white whitespace-nowrap">
+                160 × 160 px
+              </span>
+            </div>
           </div>
         ) : null}
 
-        {/* Tally Action Bar (Add Logo, Add Cover, Customize) */}
+        {/* Tally Action Bar (Add Logo, Add Cover, Add Footer) */}
         <div className="flex flex-wrap items-center gap-2 text-sm">
           {!logoUrl && (
             <Button
@@ -244,6 +350,18 @@ export function FormHeaderSettings({
             >
               <LayoutHeader />
               Add cover
+            </Button>
+          )}
+          {!footerUrl && (
+            <Button
+              isDisabled={isUploading === "footer"}
+              size="sm"
+              variant="tertiary"
+              className="bg-slate-100/80 hover:bg-slate-200/80 text-foreground font-medium rounded-lg px-3"
+              onPress={() => footerInputRef.current?.click()}
+            >
+              <Picture />
+              Add footer
             </Button>
           )}
         </div>

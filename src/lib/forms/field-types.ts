@@ -81,6 +81,9 @@ export type SectionConfig = z.infer<typeof sectionConfigSchema>;
 export type FormSettings = {
   logo_url?: string | null;
   cover_image_url?: string | null;
+  footer_image_url?: string | null;
+  cover_position_y?: number | null; // 0 to 100 vertical alignment %
+  footer_position_y?: number | null; // 0 to 100 vertical alignment %
   section_defaults?: {
     background?: BackgroundConfig;
   };

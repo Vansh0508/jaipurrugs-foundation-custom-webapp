@@ -57,7 +57,7 @@ export function EditorTopBar({
   }
 
   return (
-    <div className="sticky top-0 z-10 -mx-8 mb-6 flex flex-col gap-3 border-b border-border bg-white px-8 py-4">
+    <div className="sticky top-0 z-30 flex flex-col gap-3 border-b border-border bg-white px-8 pt-6 pb-3">
       <div className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
           <a className="text-sm font-medium text-muted hover:text-foreground" href="/forms">
