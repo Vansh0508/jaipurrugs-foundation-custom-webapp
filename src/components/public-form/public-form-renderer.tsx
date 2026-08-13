@@ -199,31 +199,28 @@ export function PublicFormRenderer({
   const progressPercent = Math.round(((currentPageIndex + 1) / pages.length) * 100);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-foreground">
+    <div className="min-h-screen bg-white text-foreground" style={pageContainerStyle}>
       {/* Cover Image Banner */}
       {coverUrl ? (
-        <div className="h-56 w-full overflow-hidden bg-slate-200">
+        <div className="h-56 sm:h-64 md:h-72 w-full overflow-hidden bg-slate-100">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img alt="Form cover" className="h-full w-full object-cover" src={coverUrl} />
         </div>
       ) : null}
 
-      <main className="mx-auto max-w-3xl px-[10%] py-8">
-        <div
-          className="flex flex-col gap-6 rounded-3xl border border-border bg-white p-8 shadow-xs transition-all"
-          style={pageContainerStyle}
-        >
+      <main className="w-full max-w-4xl mx-auto px-6 sm:px-12 md:px-16 py-8 md:py-12">
+        <div className="flex flex-col gap-8 transition-all">
           {/* Form Header (Logo & Title) */}
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4 border-b border-border/60 pb-6">
             {logoUrl ? (
-              <div className="h-16 w-16 overflow-hidden rounded-2xl border border-border bg-white p-1 shadow-2xs">
+              <div className="h-16 w-16 overflow-hidden rounded-2xl border border-border/60 bg-white p-1 shadow-2xs">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img alt="Form logo" className="h-full w-full object-contain" src={logoUrl} />
               </div>
             ) : null}
 
-            <h1 className="text-3xl font-bold text-foreground">{form.title}</h1>
-            {form.description ? <p className="text-sm text-muted">{form.description}</p> : null}
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">{form.title}</h1>
+            {form.description ? <p className="text-sm sm:text-base text-muted leading-relaxed">{form.description}</p> : null}
           </div>
 
           {/* Step Progress Bar */}
@@ -258,8 +255,8 @@ export function PublicFormRenderer({
               )}
 
               {currentPage.fields.map((field) => (
-                <div key={field.id} className="flex flex-col gap-2">
-                  <label className="text-sm font-semibold text-foreground">
+                <div key={field.id} className="flex flex-col gap-2.5">
+                  <label className="text-sm sm:text-base font-semibold text-foreground">
                     {field.label || "Question"}
                     {field.required && field.type !== "section" ? (
                       <span className="ml-1 text-danger">*</span>
