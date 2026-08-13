@@ -1,7 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Self-hosted deployment target (Docker/PM2 behind Nginx) — see docs/phases/07-polish-deploy.md
+  experimental: {
+    serverActions: {
+      // Default is 1MB, too small for logo/cover/section-background image
+      // uploads (uploadFormAsset in lib/actions/forms.ts).
+      bodySizeLimit: "10mb",
+    },
+  },
 };
 
 export default nextConfig;
