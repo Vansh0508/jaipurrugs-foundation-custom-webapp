@@ -20,6 +20,15 @@ import type { Tables } from "@/lib/types/supabase";
 
 type TeamMember = Tables<"team_members">;
 
+const PROTECTED_EMAILS = ["vansh.g@pixxeldigital.com"];
+const PROTECTED_IDS = ["d1d2a4df-2d8a-4719-a3da-4c68f3a1b724"];
+
+function isProtectedTeamMember(member: { id?: string; email?: string | null }): boolean {
+  if (member.id && PROTECTED_IDS.includes(member.id)) return true;
+  if (member.email && PROTECTED_EMAILS.includes(member.email.toLowerCase())) return true;
+  return false;
+}
+
 export function TeamMembersTable({ members }: { members: TeamMember[] }) {
   if (members.length === 0) {
     return (
@@ -55,9 +64,14 @@ export function TeamMembersTable({ members }: { members: TeamMember[] }) {
 function TeamMemberRow({ member }: { member: TeamMember }) {
   const [isPending, startTransition] = useTransition();
   const [isAlertOpen, setIsAlertOpen] = useState(false);
+  const isProtected = isProtectedTeamMember(member);
 
   function handleAction(key: string) {
     if (key === "toggle-status") {
+      if (isProtected) {
+        toast.danger("This team member is protected and cannot be deactivated.");
+        return;
+      }
       const nextStatus = member.status === "active" ? "inactive" : "active";
       startTransition(async () => {
         try {
@@ -72,11 +86,21 @@ function TeamMemberRow({ member }: { member: TeamMember }) {
         }
       });
     } else if (key === "remove") {
+      if (isProtected) {
+        toast.danger("This team member is protected and cannot be removed.");
+        return;
+      }
       setIsAlertOpen(true);
     }
   }
 
   function handleRemove() {
+    if (isProtected) {
+      toast.danger("This team member is protected and cannot be removed.");
+      setIsAlertOpen(false);
+      return;
+    }
+
     startTransition(async () => {
       try {
         await removeTeamMember(member.id);
@@ -91,7 +115,14 @@ function TeamMemberRow({ member }: { member: TeamMember }) {
   return (
     <Table.Row>
       <Table.Cell>
-        <span className="font-medium text-foreground">{member.email}</span>
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-foreground">{member.email}</span>
+          {isProtected && (
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+              Protected
+            </span>
+          )}
+        </div>
       </Table.Cell>
       <Table.Cell>
         <Chip color={member.status === "active" ? "success" : "default"} size="sm">
@@ -99,53 +130,57 @@ function TeamMemberRow({ member }: { member: TeamMember }) {
         </Chip>
       </Table.Cell>
       <Table.Cell className="text-right">
-        <Dropdown>
-          <Button
-            aria-label="Member actions"
-            className="h-8 w-8 bg-transparent text-muted hover:text-foreground"
-            isDisabled={isPending}
-            isIconOnly
-            size="sm"
-            variant="ghost"
-          >
-            <EllipsisVertical className="size-4" />
-          </Button>
-          <Dropdown.Popover placement="bottom end">
-            <Dropdown.Menu
-              aria-label="Member actions menu"
-              onAction={(key) => handleAction(key as string)}
+        {isProtected ? (
+          <span className="text-muted text-xs font-mono select-none pr-3">—</span>
+        ) : (
+          <Dropdown>
+            <Button
+              aria-label="Member actions"
+              className="h-8 w-8 bg-transparent text-muted hover:text-foreground"
+              isDisabled={isPending}
+              isIconOnly
+              size="sm"
+              variant="ghost"
             >
-              <Dropdown.Item
-                id="toggle-status"
-                textValue={
-                  member.status === "active"
-                    ? "Deactivate member"
-                    : "Activate member"
-                }
+              <EllipsisVertical className="size-4" />
+            </Button>
+            <Dropdown.Popover placement="bottom end">
+              <Dropdown.Menu
+                aria-label="Member actions menu"
+                onAction={(key) => handleAction(key as string)}
               >
-                <span className="inline-flex items-center gap-2">
-                  {member.status === "active" ? (
-                    <>
-                      <CircleXmark className="size-3.5 text-muted" />
-                      Deactivate member
-                    </>
-                  ) : (
-                    <>
-                      <CircleCheck className="size-3.5 text-success" />
-                      Activate member
-                    </>
-                  )}
-                </span>
-              </Dropdown.Item>
-              <Dropdown.Item id="remove" textValue="Remove member" variant="danger">
-                <span className="inline-flex items-center gap-2 text-danger font-medium">
-                  <TrashBin className="size-3.5 text-danger" />
-                  Remove member
-                </span>
-              </Dropdown.Item>
-            </Dropdown.Menu>
-          </Dropdown.Popover>
-        </Dropdown>
+                <Dropdown.Item
+                  id="toggle-status"
+                  textValue={
+                    member.status === "active"
+                      ? "Deactivate member"
+                      : "Activate member"
+                  }
+                >
+                  <span className="inline-flex items-center gap-2">
+                    {member.status === "active" ? (
+                      <>
+                        <CircleXmark className="size-3.5 text-muted" />
+                        Deactivate member
+                      </>
+                    ) : (
+                      <>
+                        <CircleCheck className="size-3.5 text-success" />
+                        Activate member
+                      </>
+                    )}
+                  </span>
+                </Dropdown.Item>
+                <Dropdown.Item id="remove" textValue="Remove member" variant="danger">
+                  <span className="inline-flex items-center gap-2 text-danger font-medium">
+                    <TrashBin className="size-3.5 text-danger" />
+                    Remove member
+                  </span>
+                </Dropdown.Item>
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown>
+        )}
 
         <AlertDialog isOpen={isAlertOpen} onOpenChange={setIsAlertOpen}>
           <AlertDialog.Backdrop>
