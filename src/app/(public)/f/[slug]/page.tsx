@@ -28,7 +28,7 @@ export async function generateMetadata({
     form.description?.trim() || "Fill out this form by Jaipur Rugs Foundation.";
 
   const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL || "https://forms.jaipurrugs.org";
+    process.env.NEXT_PUBLIC_SITE_URL || "https://survey.jaipurrugs.org";
   const canonicalUrl = `${siteUrl}/f/${slug}`;
 
   // Dynamic social image: cover image prioritized, fallback to logo
@@ -45,6 +45,8 @@ export async function generateMetadata({
       : imageExt === "gif"
       ? "image/gif"
       : "image/jpeg";
+
+  const socialImageUrl = `${siteUrl}/api/og/${slug}`;
 
   return {
     title: `${title} | Jaipur Rugs Foundation`,
@@ -63,8 +65,8 @@ export async function generateMetadata({
         ? {
             images: [
               {
-                url: socialImage,
-                secureUrl: socialImage,
+                url: socialImageUrl,
+                secureUrl: socialImageUrl,
                 width: 1200,
                 height: 630,
                 type: imageType,
@@ -78,7 +80,7 @@ export async function generateMetadata({
       card: socialImage ? "summary_large_image" : "summary",
       title: `${title} | Jaipur Rugs Foundation`,
       description,
-      ...(socialImage ? { images: [socialImage] } : {}),
+      ...(socialImage ? { images: [socialImageUrl] } : {}),
     },
   };
 }
