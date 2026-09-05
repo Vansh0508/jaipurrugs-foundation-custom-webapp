@@ -27,22 +27,47 @@ export async function generateMetadata({
   const description =
     form.description?.trim() || "Fill out this form by Jaipur Rugs Foundation.";
 
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL || "https://forms.jaipurrugs.org";
+  const canonicalUrl = `${siteUrl}/f/${slug}`;
+
   // Dynamic social image: cover image prioritized, fallback to logo
   const socialImage = coverUrl || logoUrl;
+
+  const imageExt = socialImage
+    ? socialImage.split("?")[0].split(".").pop()?.toLowerCase()
+    : null;
+  const imageType =
+    imageExt === "png"
+      ? "image/png"
+      : imageExt === "webp"
+      ? "image/webp"
+      : imageExt === "gif"
+      ? "image/gif"
+      : "image/jpeg";
 
   return {
     title: `${title} | Jaipur Rugs Foundation`,
     description,
+    alternates: {
+      canonical: canonicalUrl,
+    },
     openGraph: {
       title: `${title} | Jaipur Rugs Foundation`,
       description,
+      url: canonicalUrl,
       type: "website",
       siteName: "Jaipur Rugs Foundation",
+      locale: "en_US",
       ...(socialImage
         ? {
             images: [
               {
                 url: socialImage,
+                secureUrl: socialImage,
+                width: 1200,
+                height: 630,
+                type: imageType,
                 alt: `${title} cover image`,
               },
             ],
