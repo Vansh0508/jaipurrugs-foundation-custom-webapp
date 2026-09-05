@@ -4,9 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const TABS = [
-  { key: "insights", label: "Insights", path: "insights" },
+  { key: "metrics", label: "Metrics", path: "metrics" },
   { key: "submissions", label: "Submissions", path: "submissions" },
   { key: "edit", label: "Edit", path: "edit" },
+  { key: "insights", label: "AI Insights", path: "insights" },
 ] as const;
 
 export function FormNavTabs({ formId }: { formId: string }) {
