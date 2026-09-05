@@ -37,7 +37,7 @@ export default async function FormSubmissionsPage({
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-semibold">{form.title}</h1>
           <Chip color={STATUS_COLOR[form.status]} size="sm">
-            {form.status}
+            {form.status.charAt(0).toUpperCase() + form.status.slice(1)}
           </Chip>
         </div>
         <FormNavTabs formId={form.id} />

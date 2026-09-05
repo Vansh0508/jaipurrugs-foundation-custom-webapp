@@ -32,7 +32,7 @@ export default async function FormMetricsPage({ params }: { params: Promise<{ id
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-semibold">{data.form.title}</h1>
           <Chip color={STATUS_COLOR[data.form.status as keyof typeof STATUS_COLOR] || "default"} size="sm">
-            {data.form.status}
+            {data.form.status.charAt(0).toUpperCase() + data.form.status.slice(1)}
           </Chip>
         </div>
         <FormNavTabs formId={data.form.id} />

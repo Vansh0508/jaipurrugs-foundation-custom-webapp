@@ -8,7 +8,7 @@ export default async function EditFormPage({ params }: { params: Promise<{ id: s
 
   const supabase = await createClient();
   const [{ data: form }, { data: fields }] = await Promise.all([
-    supabase.from("forms").select("id, title, status, share_token, settings").eq("id", id).maybeSingle(),
+    supabase.from("forms").select("id, title, slug, status, share_token, settings").eq("id", id).maybeSingle(),
     supabase
       .from("form_fields")
       .select("*")

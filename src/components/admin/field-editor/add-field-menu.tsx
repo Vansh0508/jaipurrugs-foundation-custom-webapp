@@ -32,17 +32,17 @@ function TypePickerItems({ onSelect }: { onSelect: (type: FormFieldType) => void
 // be the only way to discover the affordance exists at all.
 export function AddFieldDivider({ onSelect }: { onSelect: (type: FormFieldType) => void }) {
   return (
-    <div className="group relative -my-2.5 flex h-5 items-center justify-center">
-      <div className="h-px w-full bg-transparent group-hover:bg-border" />
+    <div className="group relative -my-2 flex h-6 items-center justify-center py-1">
+      <div className="h-px w-full border-t border-transparent group-hover:border-border/80 transition-colors" />
       <Dropdown>
         <Button
           aria-label="Add field here"
-          className="absolute opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 focus-visible:opacity-100"
+          className="absolute flex items-center justify-center h-6 w-6 rounded-full border border-border/70 bg-white text-muted shadow-2xs opacity-40 hover:!opacity-100 group-hover:opacity-100 group-hover:border-accent/80 group-hover:text-accent group-hover:scale-110 focus-visible:opacity-100 transition-all cursor-pointer"
           isIconOnly
           size="sm"
           variant="secondary"
         >
-          <Plus />
+          <Plus className="size-3.5" />
         </Button>
         <Dropdown.Popover>
           <TypePickerItems onSelect={onSelect} />

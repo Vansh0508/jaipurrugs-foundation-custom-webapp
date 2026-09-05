@@ -15,14 +15,25 @@ export type AnswerInput = {
   };
 };
 
-export async function getPublicFormByShareToken(shareToken: string) {
+export async function getPublicFormBySlug(identifier: string) {
   const supabase = await createClient();
 
-  const { data: form, error: formError } = await supabase
+  // Try matching slug (case-insensitive) first, then fallback to share_token
+  let { data: form, error: formError } = await supabase
     .from("forms")
     .select("id, title, description, slug, share_token, status, settings")
-    .eq("share_token", shareToken)
+    .ilike("slug", identifier)
     .maybeSingle();
+
+  if (!form) {
+    const fallback = await supabase
+      .from("forms")
+      .select("id, title, description, slug, share_token, status, settings")
+      .eq("share_token", identifier)
+      .maybeSingle();
+    form = fallback.data;
+    formError = fallback.error;
+  }
 
   if (formError || !form) {
     return null;
@@ -45,6 +56,8 @@ export async function getPublicFormByShareToken(shareToken: string) {
 
   return { form, fields: fields ?? [], isNotPublished: false };
 }
+
+export const getPublicFormByShareToken = getPublicFormBySlug;
 
 export async function getOrCreateSubmission(formId: string, submitterToken: string) {
   const supabase = await createClient();
@@ -108,7 +121,13 @@ export async function saveProgressiveAnswers(
     throw new Error("Invalid submission session.");
   }
 
-  const payload = answers.map((ans) => ({
+  const validAnswers = answers.filter(
+    (ans) => ans.value !== undefined && ans.value !== null && ans.value !== ""
+  );
+
+  if (validAnswers.length === 0) return;
+
+  const payload = validAnswers.map((ans) => ({
     submission_id: submissionId,
     field_id: ans.field_id,
     value: ans.value as Json,

@@ -105,11 +105,13 @@ export function PublicFieldInput({
 
     case "date":
       return (
-        <DateField aria-label={field.label || "Date"}>
-          <DateField.Group>
-            <DateField.Input>{(segment) => <DateField.Segment segment={segment} />}</DateField.Input>
-          </DateField.Group>
-        </DateField>
+        <input
+          type="date"
+          aria-label={field.label || "Date"}
+          className="w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm text-foreground shadow-2xs focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          value={typeof value === "string" ? value : ""}
+          onChange={(e) => onChange(e.target.value)}
+        />
       );
 
     case "multiple_choice": {

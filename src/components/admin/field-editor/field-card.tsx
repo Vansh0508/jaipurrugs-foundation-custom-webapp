@@ -78,39 +78,9 @@ export function FieldCard({
       } ${definition.isSection && !resolvedBg?.type ? "bg-slate-50/70 border border-slate-200/60" : "hover:bg-slate-50/50"}`}
       style={cardStyle}
     >
-      {/* Left Action Controls (Floating outside left margin on hover/focus) */}
-      <div className="absolute -left-24 top-2.5 z-10 flex items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">
-        <DeleteFieldButton isSection={definition.isSection} onDelete={onDelete} />
-
-        <Dropdown>
-          <Button
-            aria-label="Add field after"
-            isIconOnly
-            size="sm"
-            variant="tertiary"
-            className="h-7 w-7 text-muted hover:text-foreground bg-white/90 shadow-xs border border-border"
-          >
-            <Plus />
-          </Button>
-          <Dropdown.Popover>
-            <Dropdown.Menu onAction={(key) => onAddFieldAfter(key as FormFieldType)}>
-              {FIELD_TYPE_ORDER.map((typeKey) => {
-                const def = getFieldTypeDefinition(typeKey);
-                const TypeIcon = def.icon;
-                return (
-                  <Dropdown.Item key={typeKey} id={typeKey} textValue={def.label}>
-                    <TypeIcon className="size-4 shrink-0" />
-                    <div className="flex flex-col">
-                      <Label>{def.label}</Label>
-                    </div>
-                  </Dropdown.Item>
-                );
-              })}
-            </Dropdown.Menu>
-          </Dropdown.Popover>
-        </Dropdown>
-
-        {/* Dragger button opens Popover settings on click */}
+      {/* Tally Style Field Header: Drag handle, Question Label & Action Controls */}
+      <div className="flex items-center gap-2 pl-0">
+        {/* Drag handle & Quick Settings */}
         <FieldSettingsPopover
           dragHandleProps={dragHandleProps}
           field={field}
@@ -120,10 +90,7 @@ export function FieldCard({
           onLabelChange={onLabelChange}
           onRequiredChange={onRequiredChange}
         />
-      </div>
 
-      {/* Tally Style Field Header: Question Label flush aligned */}
-      <div className="flex items-center gap-1.5 pl-0">
         {/* Inline Label Heading */}
         <div className="flex flex-1 items-center gap-1 min-w-0">
           <TextField
@@ -145,8 +112,8 @@ export function FieldCard({
             <button
               type="button"
               title={field.required ? "Required field (click to make optional)" : "Optional field (click to make required)"}
-              className={`px-1 text-sm font-bold transition-colors ${
-                field.required ? "text-danger" : "text-muted/40 hover:text-muted"
+              className={`px-1.5 py-0.5 text-sm font-bold transition-colors cursor-pointer rounded ${
+                field.required ? "text-danger" : "text-muted/40 hover:text-muted hover:bg-slate-100"
               }`}
               onClick={() => onRequiredChange(!field.required)}
             >
@@ -155,32 +122,70 @@ export function FieldCard({
           ) : null}
         </div>
 
-        {/* Right Action Controls: Type Badge & Settings Toggle */}
-        <div className="flex items-center gap-1.5">
-          <span className="flex items-center gap-1 text-xs font-medium text-muted/70 bg-slate-100/80 px-2 py-0.5 rounded-md">
+        {/* Right Action Controls: Type Badge, Add field, Duplicate, Settings, Delete */}
+        <div className="flex items-center gap-1 opacity-70 transition-opacity group-hover:opacity-100 hover:!opacity-100">
+          <span className="flex items-center gap-1 text-xs font-medium text-muted/80 bg-slate-100/80 px-2 py-0.5 rounded-md mr-0.5 select-none">
             <Icon className="size-3" />
             {definition.label}
           </span>
+
+          {/* Add Field After */}
+          <Dropdown>
+            <Button
+              aria-label="Add field after"
+              isIconOnly
+              size="sm"
+              variant="tertiary"
+              className="h-7 w-7 text-muted hover:text-foreground hover:bg-slate-100"
+            >
+              <Plus className="size-3.5" />
+            </Button>
+            <Dropdown.Popover>
+              <Dropdown.Menu onAction={(key) => onAddFieldAfter(key as FormFieldType)}>
+                {FIELD_TYPE_ORDER.map((typeKey) => {
+                  const def = getFieldTypeDefinition(typeKey);
+                  const TypeIcon = def.icon;
+                  return (
+                    <Dropdown.Item key={typeKey} id={typeKey} textValue={def.label}>
+                      <TypeIcon className="size-4 shrink-0" />
+                      <div className="flex flex-col">
+                        <Label>{def.label}</Label>
+                      </div>
+                    </Dropdown.Item>
+                  );
+                })}
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown>
+
+          {/* Duplicate Field */}
           <Button
             aria-label="Duplicate field"
             isIconOnly
             size="sm"
             variant="tertiary"
-            className="h-7 w-7 text-muted hover:text-foreground"
+            className="h-7 w-7 text-muted hover:text-foreground hover:bg-slate-100"
             onPress={onDuplicate}
           >
-            <Copy />
+            <Copy className="size-3.5" />
           </Button>
+
+          {/* Field Settings Toggle */}
           <Button
             aria-label="Field settings"
             isIconOnly
             size="sm"
             variant={showSettings ? "secondary" : "tertiary"}
-            className="h-7 w-7 text-muted hover:text-foreground"
+            className={`h-7 w-7 transition-colors ${
+              showSettings ? "bg-slate-200 text-foreground" : "text-muted hover:text-foreground hover:bg-slate-100"
+            }`}
             onPress={() => setShowSettings(!showSettings)}
           >
-            <Sliders />
+            <Sliders className="size-3.5" />
           </Button>
+
+          {/* Delete Field with Confirmation */}
+          <DeleteFieldButton isSection={definition.isSection} onDelete={onDelete} />
         </div>
       </div>
 
@@ -542,11 +547,11 @@ function FieldSettingsPopover({
       <Popover.Trigger>
         <button
           aria-label="Drag to reorder or click for settings"
-          className="flex h-7 w-7 cursor-grab items-center justify-center rounded-lg text-muted hover:text-foreground active:cursor-grabbing"
+          className="flex h-7 w-7 cursor-grab items-center justify-center rounded-lg text-muted/60 hover:text-foreground active:cursor-grabbing hover:bg-slate-100 transition-colors"
           type="button"
           {...dragHandleProps}
         >
-          <Grip />
+          <Grip className="size-4" />
         </button>
       </Popover.Trigger>
       <Popover.Content className="w-72 rounded-2xl border border-border bg-white p-3 text-foreground shadow-xl">
@@ -851,8 +856,14 @@ function FieldSettingsPopover({
 function DeleteFieldButton({ isSection, onDelete }: { isSection: boolean; onDelete: () => void }) {
   return (
     <AlertDialog>
-      <Button aria-label="Delete field" isIconOnly size="sm" variant="tertiary" className="h-7 w-7 text-muted hover:text-danger">
-        <TrashBin />
+      <Button
+        aria-label="Delete field"
+        isIconOnly
+        size="sm"
+        variant="tertiary"
+        className="h-7 w-7 text-muted hover:text-danger hover:bg-danger-50 transition-colors"
+      >
+        <TrashBin className="size-3.5" />
       </Button>
       <AlertDialog.Backdrop>
         <AlertDialog.Container>

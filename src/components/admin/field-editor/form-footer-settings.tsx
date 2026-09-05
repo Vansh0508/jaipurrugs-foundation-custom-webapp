@@ -94,7 +94,7 @@ export function FormFooterSettings({
         />
 
         {/* Action Overlay */}
-        <div className="absolute top-3 right-3 flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="absolute top-3 right-3 flex items-center gap-2 opacity-80 transition-opacity group-hover:opacity-100 hover:!opacity-100">
           <Button
             size="sm"
             variant="tertiary"

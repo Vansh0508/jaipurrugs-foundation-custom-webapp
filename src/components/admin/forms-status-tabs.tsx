@@ -23,14 +23,14 @@ function buildHref(status: StatusFilter, q: string | undefined) {
 export function FormsStatusTabs({ status, q }: { status: StatusFilter; q?: string }) {
   return (
     <div className="border-b border-border/60">
-      <nav aria-label="Filter forms by status" className="-mb-px flex items-center gap-6">
+      <nav aria-label="Filter forms by status" className="-mb-px flex items-center">
         {STATUS_TABS.map((tab) => {
           const isActive = status === tab.key;
           return (
             <Link
               key={tab.key}
               href={buildHref(tab.key, q)}
-              className={`inline-flex items-center border-b-2 py-2.5 text-sm transition-colors ${
+              className={`inline-flex items-center justify-center w-24 border-b-2 py-2.5 text-sm transition-colors ${
                 isActive
                   ? "border-accent font-semibold text-foreground"
                   : "border-transparent font-medium text-muted hover:border-border/80 hover:text-foreground"

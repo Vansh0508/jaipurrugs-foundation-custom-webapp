@@ -25,18 +25,24 @@ const COLOR_PRESETS = [
   "#F3E8FF", // Purple 100
 ];
 
+import { FormSlugEditor } from "./form-slug-editor";
+
 export function FormHeaderSettings({
   formId,
   title,
+  slug,
   settings,
   onTitleChange,
+  onSlugChange,
   onSettingsChange,
   onSaveStatusChange,
 }: {
   formId: string;
   title: string;
+  slug: string;
   settings: FormSettings;
   onTitleChange: (value: string) => void;
+  onSlugChange: (newSlug: string) => void;
   onSettingsChange: (newSettings: FormSettings) => void;
   onSaveStatusChange: (status: "saving" | "saved") => void;
 }) {
@@ -200,7 +206,7 @@ export function FormHeaderSettings({
           />
 
           {/* Action Overlay */}
-          <div className="absolute top-3 right-3 flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+          <div className="absolute top-3 right-3 flex items-center gap-2 opacity-80 transition-opacity group-hover:opacity-100 hover:!opacity-100">
             <Button
               size="sm"
               variant="tertiary"
@@ -373,6 +379,14 @@ export function FormHeaderSettings({
             placeholder="Untitled form"
           />
         </TextField>
+
+        {/* Custom Slug Permalink Editor */}
+        <FormSlugEditor
+          formId={formId}
+          slug={slug}
+          onSaveStatusChange={onSaveStatusChange}
+          onSlugChange={onSlugChange}
+        />
       </div>
 
       {/* Customize Form Background Modal */}

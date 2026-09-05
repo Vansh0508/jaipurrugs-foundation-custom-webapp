@@ -101,7 +101,23 @@ export function PublicFormRenderer({
           type: f.type,
           position: f.position,
         },
-      }));
+      }))
+      .filter((ans) => ans.value !== null && ans.value !== undefined && ans.value !== "");
+  }
+
+  function getAllAnswerInputs(): AnswerInput[] {
+    return fields
+      .filter((f) => f.type !== "section")
+      .map((f) => ({
+        field_id: f.id,
+        value: answersMap[f.id] ?? null,
+        field_snapshot: {
+          label: f.label,
+          type: f.type,
+          position: f.position,
+        },
+      }))
+      .filter((ans) => ans.value !== null && ans.value !== undefined && ans.value !== "");
   }
 
   function validateCurrentPage(): boolean {
@@ -132,7 +148,9 @@ export function PublicFormRenderer({
     setIsSaving(true);
     try {
       const answersPayload = getPageAnswerInputs(currentPage.fields);
-      await saveProgressiveAnswers(submissionId, submitterToken, answersPayload);
+      if (answersPayload.length > 0) {
+        await saveProgressiveAnswers(submissionId, submitterToken, answersPayload);
+      }
       setCurrentPageIndex((prev) => Math.min(pages.length - 1, prev + 1));
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
@@ -144,22 +162,55 @@ export function PublicFormRenderer({
 
   async function handleSubmit() {
     if (!validateCurrentPage()) return;
-    if (!submissionId || !submitterToken) return;
+
+    let currentSubmissionId = submissionId;
+    let currentToken = submitterToken;
 
     setIsSaving(true);
     try {
-      const answersPayload = getPageAnswerInputs(currentPage.fields);
-      await completeSubmission(submissionId, submitterToken, answersPayload);
+      if (!currentToken) {
+        const storageKey = `form_submitter_token_${form.id}`;
+        currentToken =
+          localStorage.getItem(storageKey) ||
+          (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+                const r = (Math.random() * 16) | 0;
+                const v = c === "x" ? r : (r & 0x3) | 0x8;
+                return v.toString(16);
+              }));
+        localStorage.setItem(storageKey, currentToken);
+        setSubmitterToken(currentToken);
+      }
+
+      if (!currentSubmissionId) {
+        const sessionRes = await getOrCreateSubmission(form.id, currentToken);
+        currentSubmissionId = sessionRes.submission.id;
+        setSubmissionId(currentSubmissionId);
+      }
+
+      const answersPayload = getAllAnswerInputs();
+      await completeSubmission(currentSubmissionId, currentToken, answersPayload);
       setIsSubmitted(true);
       toast.success("Submission completed!");
 
-      const redirectUrl = (settings as Record<string, unknown>)?.redirect_url as string | undefined;
-      if (redirectUrl) {
-        setTimeout(() => {
-          window.location.href = redirectUrl;
-        }, 1500);
+      const isRedirect = settings.submit_action === "redirect" && Boolean(settings.redirect_url);
+      if (isRedirect && settings.redirect_url) {
+        let destination = settings.redirect_url.trim();
+        if (!destination.startsWith("http://") && !destination.startsWith("https://")) {
+          destination = `https://${destination}`;
+        }
+        const delayMs = (settings.redirect_delay_seconds ?? 1.5) * 1000;
+        if (delayMs <= 0) {
+          window.location.href = destination;
+        } else {
+          setTimeout(() => {
+            window.location.href = destination;
+          }, delayMs);
+        }
       }
-    } catch {
+    } catch (err) {
+      console.error("Submission failed:", err);
       toast.danger("Submission failed. Please try again.");
     } finally {
       setIsSaving(false);
@@ -167,8 +218,15 @@ export function PublicFormRenderer({
   }
 
   if (isSubmitted) {
+    const isRedirect = settings.submit_action === "redirect" && Boolean(settings.redirect_url);
+    let destination = settings.redirect_url?.trim() ?? "";
+    if (destination && !destination.startsWith("http://") && !destination.startsWith("https://")) {
+      destination = `https://${destination}`;
+    }
+
+    const successTitle = settings.success_title || "Form Completed";
     const successMsg =
-      ((settings as Record<string, unknown>)?.success_message as string) ||
+      settings.success_message ||
       "Thank you! Your submission has been received.";
 
     return (
@@ -176,8 +234,20 @@ export function PublicFormRenderer({
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600 mb-4">
           <CircleCheck className="size-8" />
         </div>
-        <h1 className="text-2xl font-bold text-foreground mb-2">Form Completed</h1>
-        <p className="max-w-md text-muted">{successMsg}</p>
+        <h1 className="text-2xl font-bold text-foreground mb-2">{successTitle}</h1>
+        <p className="max-w-md text-muted leading-relaxed">{successMsg}</p>
+
+        {isRedirect && destination && (
+          <div className="mt-6 flex flex-col items-center gap-2 rounded-xl bg-slate-50 border border-slate-200 px-5 py-3 text-xs text-muted">
+            <span>Redirecting you shortly...</span>
+            <a
+              href={destination}
+              className="text-xs font-semibold text-primary hover:underline"
+            >
+              Click here if you are not redirected automatically →
+            </a>
+          </div>
+        )}
       </div>
     );
   }
@@ -322,7 +392,7 @@ export function PublicFormRenderer({
                 variant="primary"
                 onPress={handleSubmit}
               >
-                Submit
+                {settings.submit_button_text?.trim() || "Submit"}
               </Button>
             )}
           </div>

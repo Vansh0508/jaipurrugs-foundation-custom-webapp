@@ -91,6 +91,12 @@ export type FormSettings = {
   section_defaults?: {
     background?: BackgroundConfig;
   };
+  submit_button_text?: string | null;
+  submit_action?: "message" | "redirect" | null;
+  success_title?: string | null;
+  success_message?: string | null;
+  redirect_url?: string | null;
+  redirect_delay_seconds?: number | null;
 };
 
 export function resolveSectionBackground(

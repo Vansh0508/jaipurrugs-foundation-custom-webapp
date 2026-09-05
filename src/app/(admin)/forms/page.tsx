@@ -23,7 +23,7 @@ export default async function FormsListPage({
   const supabase = await createClient();
   let query = supabase
     .from("forms")
-    .select("id, title, status, slug, updated_at")
+    .select("id, title, status, slug, share_token, updated_at")
     .order("created_at", { ascending: false });
 
   if (status !== "all") {

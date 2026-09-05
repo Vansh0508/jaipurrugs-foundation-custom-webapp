@@ -1,10 +1,12 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireActiveTeamMember } from "@/lib/auth/session";
 import { getFieldTypeDefinition, type FormSettings } from "@/lib/forms/field-types";
 import { midpointPosition } from "@/lib/forms/position";
+import { sanitizeSlug } from "@/lib/forms/slug";
 import type { Enums, Json, Tables } from "@/lib/types/supabase";
 
 // Inserts a blank row (DB defaults handle title/slug/share_token/status) and
@@ -23,17 +25,112 @@ export async function createForm() {
   redirect(`/forms/${data.id}/edit`);
 }
 
-// Debounced from the sticky top bar's inline-editable title — see
-// docs/phases/03-field-registry-editor.md.
-export async function updateFormTitle(formId: string, title: string) {
+export async function checkSlugAvailability(
+  formId: string,
+  slugCandidate: string,
+): Promise<{ available: boolean; slug: string; reason?: string }> {
   await requireActiveTeamMember();
 
+  const sanitized = sanitizeSlug(slugCandidate);
+  if (!sanitized) {
+    return { available: false, slug: sanitized, reason: "Slug cannot be empty." };
+  }
+
+  const reserved = ["f", "forms", "api", "auth", "dashboard", "team", "new", "edit"];
+  if (reserved.includes(sanitized)) {
+    return { available: false, slug: sanitized, reason: "This slug is reserved for system routes." };
+  }
+
   const supabase = await createClient();
-  const { error } = await supabase.from("forms").update({ title }).eq("id", formId);
+  const { data: existing, error } = await supabase
+    .from("forms")
+    .select("id")
+    .ilike("slug", sanitized)
+    .neq("id", formId)
+    .maybeSingle();
 
   if (error) {
     throw new Error(error.message);
   }
+
+  if (existing) {
+    return { available: false, slug: sanitized, reason: "This slug is already in use by another form." };
+  }
+
+  return { available: true, slug: sanitized };
+}
+
+export async function updateFormSlug(formId: string, newSlug: string): Promise<string> {
+  await requireActiveTeamMember();
+
+  const check = await checkSlugAvailability(formId, newSlug);
+  if (!check.available) {
+    throw new Error(check.reason || "Slug is not available.");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("forms")
+    .update({ slug: check.slug })
+    .eq("id", formId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return check.slug;
+}
+
+// Debounced from the sticky top bar's inline-editable title — see
+// docs/phases/03-field-registry-editor.md.
+export async function updateFormTitle(formId: string, title: string): Promise<{ slug?: string }> {
+  await requireActiveTeamMember();
+
+  const supabase = await createClient();
+  const { data: form, error: fetchError } = await supabase
+    .from("forms")
+    .select("slug")
+    .eq("id", formId)
+    .single();
+
+  if (fetchError) {
+    throw new Error(fetchError.message);
+  }
+
+  const updates: { title: string; slug?: string } = { title };
+  let updatedSlug: string | undefined;
+
+  // Auto-generate slug from title if the current slug is an untitled default
+  if (form?.slug?.startsWith("untitled-form-") && title.trim()) {
+    const candidate = sanitizeSlug(title);
+    if (candidate) {
+      let attempt = candidate;
+      let counter = 1;
+      while (true) {
+        const { data: existing } = await supabase
+          .from("forms")
+          .select("id")
+          .ilike("slug", attempt)
+          .neq("id", formId)
+          .maybeSingle();
+
+        if (!existing) {
+          updates.slug = attempt;
+          updatedSlug = attempt;
+          break;
+        }
+        attempt = `${candidate}-${counter++}`;
+      }
+    }
+  }
+
+  const { error } = await supabase.from("forms").update(updates).eq("id", formId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return { slug: updatedSlug };
 }
 
 // Basic draft <-> published toggle for the top bar's Publish/Unpublish
@@ -48,6 +145,17 @@ export async function setFormStatus(formId: string, status: Enums<"form_status">
   if (error) {
     throw new Error(error.message);
   }
+
+  revalidatePath("/forms");
+  revalidatePath(`/forms/${formId}/edit`);
+}
+
+export async function archiveForm(formId: string) {
+  await setFormStatus(formId, "archived");
+}
+
+export async function unarchiveForm(formId: string) {
+  await setFormStatus(formId, "draft");
 }
 
 async function getLiveSiblingPositions(supabase: Awaited<ReturnType<typeof createClient>>, formId: string) {

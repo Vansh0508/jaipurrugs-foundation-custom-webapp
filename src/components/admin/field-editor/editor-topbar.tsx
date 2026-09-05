@@ -16,6 +16,7 @@ const STATUS_COLOR: Record<FormStatus, "default" | "success" | "warning"> = {
 export function EditorTopBar({
   formId,
   title,
+  slug,
   status,
   shareToken,
   saveStatus,
@@ -24,13 +25,14 @@ export function EditorTopBar({
 }: {
   formId: string;
   title: string;
+  slug: string;
   status: FormStatus;
   shareToken: string;
   saveStatus: "saving" | "saved";
   onTitleChange: (value: string) => void;
   onTogglePublish: () => void;
 }) {
-  const publicUrl = typeof window !== "undefined" ? `${window.location.origin}/f/${shareToken}` : "";
+  const publicUrl = typeof window !== "undefined" ? `${window.location.origin}/f/${slug || shareToken}` : "";
 
   async function handleCopyLink() {
     try {
@@ -78,7 +80,7 @@ export function EditorTopBar({
               "Back to forms" link for the same pattern. */}
           <a
             className="button button--tertiary button--sm inline-flex items-center gap-2"
-            href={`/f/${shareToken}`}
+            href={`/f/${slug || shareToken}`}
             rel="noreferrer"
             target="_blank"
           >

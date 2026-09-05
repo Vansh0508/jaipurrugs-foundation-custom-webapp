@@ -9,6 +9,7 @@ import { EditorCanvas } from "./editor-canvas";
 import type { FieldRow } from "./field-card";
 import { EditorTopBar } from "./editor-topbar";
 import { FormHeaderSettings } from "./form-header-settings";
+import { FormSubmitSettings } from "./form-submit-settings";
 import { FormFooterSettings } from "./form-footer-settings";
 
 const TITLE_DEBOUNCE_MS = 900;
@@ -20,10 +21,11 @@ export function EditorShell({
   form,
   initialFields,
 }: {
-  form: Pick<Tables<"forms">, "id" | "title" | "status" | "share_token" | "settings">;
+  form: Pick<Tables<"forms">, "id" | "title" | "slug" | "status" | "share_token" | "settings">;
   initialFields: FieldRow[];
 }) {
   const [title, setTitle] = useState(form.title);
+  const [slug, setSlug] = useState(form.slug);
   const [status, setStatus] = useState<Enums<"form_status">>(form.status);
   const [settings, setSettings] = useState<FormSettings>((form.settings as FormSettings) ?? {});
   const [saveStatus, setSaveStatus] = useState<"saving" | "saved">("saved");
@@ -35,6 +37,11 @@ export function EditorShell({
     titleTimerRef.current = setTimeout(() => {
       setSaveStatus("saving");
       updateFormTitle(form.id, value)
+        .then((res) => {
+          if (res?.slug) {
+            setSlug(res.slug);
+          }
+        })
         .catch(() => toast.danger("Couldn't save the title."))
         .finally(() => setSaveStatus("saved"));
     }, TITLE_DEBOUNCE_MS);
@@ -59,6 +66,7 @@ export function EditorShell({
         formId={form.id}
         saveStatus={saveStatus}
         shareToken={form.share_token}
+        slug={slug}
         status={status}
         title={title}
         onTitleChange={handleTitleChange}
@@ -68,9 +76,11 @@ export function EditorShell({
         <FormHeaderSettings
           formId={form.id}
           settings={settings}
+          slug={slug}
           title={title}
           onSaveStatusChange={setSaveStatus}
           onSettingsChange={setSettings}
+          onSlugChange={setSlug}
           onTitleChange={handleTitleChange}
         />
         <EditorCanvas
@@ -78,6 +88,12 @@ export function EditorShell({
           formId={form.id}
           initialFields={initialFields}
           onSaveStatusChange={setSaveStatus}
+        />
+        <FormSubmitSettings
+          formId={form.id}
+          settings={settings}
+          onSaveStatusChange={setSaveStatus}
+          onSettingsChange={setSettings}
         />
         <FormFooterSettings
           formId={form.id}
