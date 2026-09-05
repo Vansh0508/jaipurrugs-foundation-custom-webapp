@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ArrowUpFromLine, LayoutHeader, Picture, Sliders, TrashBin } from "@gravity-ui/icons";
+import { ArrowUpFromLine, LayoutHeader, Picture, Sliders, TrashBin, Xmark } from "@gravity-ui/icons";
 import {
   Button,
   Input,
@@ -14,6 +14,7 @@ import {
 } from "@heroui/react";
 import { deleteFormAsset, updateFormSettings, uploadFormAsset } from "@/lib/actions/forms";
 import type { BackgroundConfig, FormSettings } from "@/lib/forms/field-types";
+import { AssetPickerModal } from "./asset-picker-modal";
 
 const COLOR_PRESETS = [
   "#F8FAFC", // Slate 50
@@ -50,6 +51,7 @@ export function FormHeaderSettings({
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
   const [isRepositioningCover, setIsRepositioningCover] = useState(false);
   const [isRepositioningFooter, setIsRepositioningFooter] = useState(false);
+  const [pickerAssetType, setPickerAssetType] = useState<"logo" | "cover" | "footer" | null>(null);
 
   const logoInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -157,6 +159,19 @@ export function FormHeaderSettings({
     setIsRepositioningFooter(false);
   }
 
+  async function handleSelectAsset(selectedUrl: string) {
+    if (pickerAssetType === "logo") {
+      await handleSaveSettings({ logo_url: selectedUrl });
+      toast.success("Logo updated");
+    } else if (pickerAssetType === "cover") {
+      await handleSaveSettings({ cover_image_url: selectedUrl, cover_position_y: 50 });
+      toast.success("Cover image updated");
+    } else if (pickerAssetType === "footer") {
+      await handleSaveSettings({ footer_image_url: selectedUrl, footer_position_y: 50 });
+      toast.success("Footer image updated");
+    }
+  }
+
   function handleDefaultBgTypeChange(type: "none" | "color" | "image") {
     let nextBg: BackgroundConfig | undefined;
     if (type === "color") {
@@ -223,7 +238,7 @@ export function FormHeaderSettings({
               size="sm"
               variant="tertiary"
               className="bg-white/90 text-foreground shadow-xs backdrop-blur-xs hover:bg-white"
-              onPress={() => coverInputRef.current?.click()}
+              onPress={() => setPickerAssetType("cover")}
             >
               <ArrowUpFromLine />
               Change cover
@@ -300,29 +315,38 @@ export function FormHeaderSettings({
       <div className="flex flex-col gap-3">
         {/* Logo Widget (Tally Style) */}
         {logoUrl ? (
-          <div className="group relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-border bg-white p-1.5 shadow-sm">
+          <div className="group relative flex h-20 w-20 items-center justify-center rounded-2xl border border-border bg-white p-1.5 shadow-sm transition-all hover:border-accent/60">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img alt="Form logo" className="h-full w-full object-contain" src={logoUrl} />
-            <div className="absolute inset-0 flex items-center justify-center gap-1.5 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-              <Button
-                isIconOnly
-                size="sm"
-                variant="tertiary"
-                className="bg-white/90 text-foreground shadow-xs hover:bg-white"
-                onPress={() => logoInputRef.current?.click()}
-              >
-                <ArrowUpFromLine />
-              </Button>
-              <Button
-                isIconOnly
-                size="sm"
-                variant="tertiary"
-                className="bg-white/90 text-danger shadow-xs hover:bg-white"
-                onPress={handleRemoveLogo}
-              >
-                <TrashBin />
-              </Button>
+            <img
+              alt="Form logo"
+              className="h-full w-full object-contain pointer-events-none"
+              src={logoUrl}
+            />
+
+            {/* Hover overlay to change logo */}
+            <div
+              className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 rounded-2xl cursor-pointer z-10"
+              onClick={() => setPickerAssetType("logo")}
+            >
+              <span className="text-[10px] font-semibold text-white bg-black/60 px-2 py-0.5 rounded-md shadow-xs pointer-events-none">
+                Change
+              </span>
             </div>
+
+            {/* Cross Icon button on hover */}
+            <button
+              type="button"
+              aria-label="Remove logo"
+              title="Remove logo"
+              className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-slate-900 text-white shadow-md opacity-0 group-hover:opacity-100 hover:bg-danger hover:scale-110 transition-all cursor-pointer z-30"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleRemoveLogo();
+              }}
+            >
+              <Xmark className="size-3.5 stroke-2" />
+            </button>
+
             {/* Ideal dimensions badge on hover */}
             <div className="absolute bottom-1 right-1 opacity-0 transition-opacity group-hover:opacity-100 pointer-events-none">
               <span className="rounded bg-black/80 px-1 py-0.5 text-[9px] font-medium text-white whitespace-nowrap">
@@ -340,7 +364,7 @@ export function FormHeaderSettings({
               size="sm"
               variant="tertiary"
               className="bg-slate-100/80 hover:bg-slate-200/80 text-foreground font-medium rounded-lg px-3"
-              onPress={() => logoInputRef.current?.click()}
+              onPress={() => setPickerAssetType("logo")}
             >
               <Picture />
               Add logo
@@ -352,7 +376,7 @@ export function FormHeaderSettings({
               size="sm"
               variant="tertiary"
               className="bg-slate-100/80 hover:bg-slate-200/80 text-foreground font-medium rounded-lg px-3"
-              onPress={() => coverInputRef.current?.click()}
+              onPress={() => setPickerAssetType("cover")}
             >
               <LayoutHeader />
               Add cover
@@ -364,7 +388,7 @@ export function FormHeaderSettings({
               size="sm"
               variant="tertiary"
               className="bg-slate-100/80 hover:bg-slate-200/80 text-foreground font-medium rounded-lg px-3"
-              onPress={() => footerInputRef.current?.click()}
+              onPress={() => setPickerAssetType("footer")}
             >
               <Picture />
               Add footer
@@ -507,6 +531,25 @@ export function FormHeaderSettings({
             </Modal.Container>
           </Modal.Backdrop>
         </Modal>
+      )}
+
+      {pickerAssetType && (
+        <AssetPickerModal
+          isOpen={pickerAssetType !== null}
+          onOpenChange={(open) => {
+            if (!open) setPickerAssetType(null);
+          }}
+          formId={formId}
+          assetType={pickerAssetType}
+          currentUrl={
+            pickerAssetType === "logo"
+              ? logoUrl
+              : pickerAssetType === "cover"
+              ? coverUrl
+              : footerUrl
+          }
+          onSelectImage={handleSelectAsset}
+        />
       )}
     </div>
   );

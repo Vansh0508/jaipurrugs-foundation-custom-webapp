@@ -5,6 +5,7 @@ import { ArrowUpFromLine, Sliders, TrashBin } from "@gravity-ui/icons";
 import { Button, toast } from "@heroui/react";
 import { deleteFormAsset, updateFormSettings, uploadFormAsset } from "@/lib/actions/forms";
 import type { FormSettings } from "@/lib/forms/field-types";
+import { AssetPickerModal } from "./asset-picker-modal";
 
 export function FormFooterSettings({
   formId,
@@ -19,6 +20,7 @@ export function FormFooterSettings({
 }) {
   const [isUploading, setIsUploading] = useState(false);
   const [isRepositioning, setIsRepositioning] = useState(false);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
   const footerInputRef = useRef<HTMLInputElement>(null);
 
   const footerUrl = settings.footer_image_url ?? null;
@@ -111,7 +113,7 @@ export function FormFooterSettings({
             size="sm"
             variant="tertiary"
             className="bg-white/90 text-foreground shadow-xs backdrop-blur-xs hover:bg-white"
-            onPress={() => footerInputRef.current?.click()}
+            onPress={() => setIsPickerOpen(true)}
           >
             <ArrowUpFromLine />
             Change footer
@@ -182,6 +184,20 @@ export function FormFooterSettings({
           </div>
         )}
       </div>
+
+      {isPickerOpen && (
+        <AssetPickerModal
+          isOpen={isPickerOpen}
+          onOpenChange={setIsPickerOpen}
+          formId={formId}
+          assetType="footer"
+          currentUrl={footerUrl}
+          onSelectImage={async (selectedUrl) => {
+            await handleSaveSettings({ footer_image_url: selectedUrl, footer_position_y: 50 });
+            toast.success("Footer image updated");
+          }}
+        />
+      )}
     </div>
   );
 }

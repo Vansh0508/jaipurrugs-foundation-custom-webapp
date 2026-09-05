@@ -423,3 +423,107 @@ export async function deleteFormAsset(publicUrl: string) {
     // Non-fatal if URL parsing or cleanup fails
   }
 }
+
+export type FormAssetItem = {
+  name: string;
+  id: string | null;
+  updated_at: string | null;
+  created_at: string | null;
+  size: number | null;
+  storagePath: string;
+  publicUrl: string;
+  type: "cover" | "logo" | "footer" | "other";
+};
+
+export async function listFormAssets(
+  formId: string,
+  assetType: "logo" | "cover" | "footer" | "all" = "all",
+  scope: "current_form" | "all_forms" = "current_form",
+): Promise<FormAssetItem[]> {
+  await requireActiveTeamMember();
+  const supabase = await createClient();
+
+  const results: FormAssetItem[] = [];
+
+  if (scope === "all_forms") {
+    const { data: formFolders } = await supabase.storage.from("form-assets").list("forms", {
+      limit: 100,
+    });
+
+    const targetFormIds = (formFolders ?? [])
+      .filter((f) => f.name && !f.name.includes(".") && f.name !== ".emptyFolderPlaceholder")
+      .map((f) => f.name);
+
+    for (const fId of targetFormIds) {
+      const typesToQuery = assetType !== "all" ? [assetType] : ["cover", "logo", "footer"];
+      for (const type of typesToQuery) {
+        const folderPath = `forms/${fId}/${type}`;
+        const { data: files } = await supabase.storage.from("form-assets").list(folderPath, {
+          limit: 100,
+          sortBy: { column: "created_at", order: "desc" },
+        });
+
+        if (files) {
+          for (const file of files) {
+            if (!file.name || file.name === ".emptyFolderPlaceholder") continue;
+            const storagePath = `${folderPath}/${file.name}`;
+            const { data } = supabase.storage.from("form-assets").getPublicUrl(storagePath);
+            results.push({
+              name: file.name,
+              id: file.id,
+              updated_at: file.updated_at,
+              created_at: file.created_at,
+              size: (file.metadata as Record<string, unknown> | null)?.size as number | null ?? null,
+              storagePath,
+              publicUrl: data.publicUrl,
+              type: type as "cover" | "logo" | "footer",
+            });
+          }
+        }
+      }
+    }
+  } else {
+    const typesToQuery = assetType !== "all" ? [assetType] : ["cover", "logo", "footer"];
+    for (const type of typesToQuery) {
+      const folderPath = `forms/${formId}/${type}`;
+      const { data: files } = await supabase.storage.from("form-assets").list(folderPath, {
+        limit: 100,
+        sortBy: { column: "created_at", order: "desc" },
+      });
+
+      if (files) {
+        for (const file of files) {
+          if (!file.name || file.name === ".emptyFolderPlaceholder") continue;
+          const storagePath = `${folderPath}/${file.name}`;
+          const { data } = supabase.storage.from("form-assets").getPublicUrl(storagePath);
+          results.push({
+            name: file.name,
+            id: file.id,
+            updated_at: file.updated_at,
+            created_at: file.created_at,
+            size: (file.metadata as Record<string, unknown> | null)?.size as number | null ?? null,
+            storagePath,
+            publicUrl: data.publicUrl,
+            type: type as "cover" | "logo" | "footer",
+          });
+        }
+      }
+    }
+  }
+
+  return results.sort((a, b) => {
+    const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return timeB - timeA;
+  });
+}
+
+export async function deleteFormAssetByPath(storagePath: string) {
+  await requireActiveTeamMember();
+  const supabase = await createClient();
+  const cleanPath = storagePath.startsWith("/") ? storagePath.slice(1) : storagePath;
+  const { error } = await supabase.storage.from("form-assets").remove([decodeURIComponent(cleanPath)]);
+  if (error) {
+    throw new Error(error.message);
+  }
+}
