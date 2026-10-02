@@ -29,6 +29,7 @@ The app has exactly two surfaces:
 - Node.js backend via Next.js **Server Actions** (default mutation path) and route handlers (only for things Server Actions can't do, e.g. webhooks)
 - **Self-hosted** deployment on the foundation's own server (Docker/PM2 + Nginx + Let's Encrypt), as a subdomain of `jaipurrugs.org` — not Vercel
 - Schema managed via Supabase MCP connector + SQL files committed under `supabase/migrations/`
+- **Mastra (`@mastra/core`)** for the WhatsApp AI agent (OpenAI via Mastra's model router, `OPENAI_API_KEY`), with **Zernio** as the WhatsApp API — see [docs/phases/08-ai-agent.md](docs/phases/08-ai-agent.md)
 
 ## 3. Folder Structure
 
@@ -36,7 +37,7 @@ The app has exactly two surfaces:
 src/
   app/
     (public)/f/[shareToken]/page.tsx       # anonymous form fill, no auth
-    (admin)/{dashboard,forms,team}/...      # gated by proxy.ts + RLS, shares one nav-shell layout
+    (admin)/{dashboard,forms,team,settings,agents}/...  # gated by proxy.ts + RLS, shares one nav-shell layout
     auth/{login,callback,blocked}/          # email+password sign in/up (single flow), confirmation callback, deny wall
   components/{ui,admin,public-form,providers}/  # providers/ is for app-wide client providers we add later
                                                   # (e.g. React Query) — HeroUI v3 itself needs no provider
@@ -44,8 +45,10 @@ src/
     supabase/{server,client,admin,proxy}.ts  # 4 factories; admin.ts is server-only, service-role;
                                               # proxy.ts holds the updateSession() helper proxy.ts calls
     auth/session.ts                          # getCurrentUser() / requireActiveTeamMember() server helpers
-    actions/{forms,submissions,team,auth}.ts # server actions, grouped by domain
+    actions/{forms,submissions,team,auth,zernio,agent,kb}.ts # server actions, grouped by domain
     forms/field-types.ts                     # single source of truth: field-type registry
+    mastra/                                  # AI agent + context-bound tools (phone-scoped; see phase 8)
+    zernio/                                  # Zernio WhatsApp API client (server-only)
   proxy.ts                                   # (admin)-only session + whitelist gate (Next.js 16: renamed from middleware.ts)
 supabase/
   migrations/                                # one .sql file per schema change, incl. RLS
@@ -76,6 +79,7 @@ docs/phases/                                 # phase-by-phase scope, do's, don't
 - **Do** use short-lived signed URLs for any admin access to files in the private `form-uploads` / `admin-assets` buckets — never make those buckets public. (`form-assets`, holding logos/cover/section images, is the intentional exception — see §7.)
 - **Do** treat every field's `position` as a fractional index — reordering updates exactly one row, never a full renumbering pass.
 - **Do** save historical answers with a `field_snapshot` so metrics and exports stay correct even after a field's label/type is edited later.
+- **Do** scope every AI-agent tool to the conversation's phone via the `AgentToolContext` closure and `public.agent_submissions_for_phone()` — never give a tool a phone/identity argument (see phase 8).
 - **Do** keep the app pinned to light mode only (`<html class="light" data-theme="light">` in `app/layout.tsx`) — see §2.
 
 ## 6. Don'ts
@@ -95,7 +99,7 @@ docs/phases/                                 # phase-by-phase scope, do's, don't
 - **Auth method: Supabase Auth email + password only.** No magic link, no OAuth provider, and **no separate sign-up UI** — `/auth/login` has one form (email + password, one button). The `signIn` server action tries `signInWithPassword` first; if that fails, it tries `signUp` with the same credentials, which only succeeds when no account exists yet (Supabase's `signUp` on an already-registered email fails distinctly) — so a whitelisted email's first-ever visit creates its account with whatever password it enters, and every visit after that just signs in. This depends on the project having **email confirmation disabled** (see the manual Dashboard step below) — with it enabled, a first-time visit would get stuck on "check your email" instead of signing straight in.
 - Whitelist enforcement is layered, and all layers must exist before auth is considered done:
   1. A Postgres "before user created" Auth Hook (`public.hook_restrict_signup_to_active_team_members`) rejects account creation (`supabase.auth.signUp`) outright with HTTP 403 unless `team_members.status = 'active'` for that email. An unauthorized email never gets an `auth.users` row. **This hook must be manually enabled once** in the Supabase Dashboard (Authentication → Hooks → Before User Created → select the function) — there is no CLI/MCP call that does this.
-  2. `proxy.ts` re-validates the session via `supabase.auth.getClaims()` (never `getSession()` — it doesn't guarantee JWT revalidation) on every request under the real admin paths (`/dashboard`, `/forms`, `/team` — **not** the `(admin)` route-group syntax, which doesn't appear in the actual URL and would never match). It then queries `team_members` for that email; RLS means this query naturally returns zero rows for anyone not an active member, so "no row back" is sufficient to redirect to `/auth/blocked` and sign the user out. This is what catches a user deactivated after their session was already issued (the hook only fires once, at account creation).
+  2. `proxy.ts` re-validates the session via `supabase.auth.getClaims()` (never `getSession()` — it doesn't guarantee JWT revalidation) on every request under the real admin paths (`/dashboard`, `/forms`, `/team`, `/settings`, `/agents` — **not** the `(admin)` route-group syntax, which doesn't appear in the actual URL and would never match). It then queries `team_members` for that email; RLS means this query naturally returns zero rows for anyone not an active member, so "no row back" is sufficient to redirect to `/auth/blocked` and sign the user out. This is what catches a user deactivated after their session was already issued (the hook only fires once, at account creation).
   3. RLS on every admin-owned table via `public.is_active_team_member()`, so even a valid session for a since-deactivated user is refused at the query level, independent of proxy.ts.
 - `team_members` has **no roles**. Any row with `status = 'active'` can read and write the entire `team_members` table (add, reactivate, deactivate, or permanently delete any row, including in principle its own) — see the single-tier decision in §1.
 - **"Remove" is a hard delete**, not a status toggle — `removeTeamMember` issues a real `DELETE`. This is a deliberate simplicity trade-off (no audit trail for removed rows) confirmed for this project; deactivating (status → `inactive`) remains available as the separate, reversible action for temporarily revoking access.
@@ -120,6 +124,7 @@ Detailed scope, do's, and don'ts for each phase live in `docs/phases/`. This tab
 | 5 | `form_submissions`/`form_answers` schema + RLS, public renderer, progressive save | Public form-fill surface | [docs/phases/05-public-renderer-submissions.md](docs/phases/05-public-renderer-submissions.md) |
 | 6 | Submissions table + CSV export + Realtime, per-field metrics dashboard | Admin — Submissions, Metrics | [docs/phases/06-submissions-metrics.md](docs/phases/06-submissions-metrics.md) |
 | 7 | Publish flow, form settings, signed URLs, Docker/Nginx/DNS, CI/CD | Deployment, polish | [docs/phases/07-polish-deploy.md](docs/phases/07-polish-deploy.md) |
+| 8 | Mastra WhatsApp agent, knowledge base, phone-scoped tools, `/agents` workbench | Admin — AI Agent, DB, Zernio | [docs/phases/08-ai-agent.md](docs/phases/08-ai-agent.md) |
 
 <!-- BEGIN:nextjs-agent-rules -->
 

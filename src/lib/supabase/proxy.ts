@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/types/supabase";
 
-const ADMIN_PATH_PREFIXES = ["/dashboard", "/forms", "/team"];
+const ADMIN_PATH_PREFIXES = ["/dashboard", "/forms", "/team", "/settings"];
 
 function isAdminPath(pathname: string) {
   return ADMIN_PATH_PREFIXES.some(

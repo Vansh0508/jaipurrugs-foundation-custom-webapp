@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowRightFromSquare,
+  Comments,
+  Gear,
   House,
   LayoutSideContentLeft,
   Persons,
@@ -18,10 +20,12 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: House },
   { href: "/forms", label: "Forms", icon: SquareListUl },
   { href: "/team", label: "Team", icon: Persons },
+  { href: "/agents", label: "AI Agent", icon: Comments },
 ];
 
 export function AdminShell({ email, children }: { email: string; children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
 
   function toggleCollapsed() {
@@ -85,7 +89,9 @@ export function AdminShell({ email, children }: { email: string; children: React
           <Dropdown.Popover placement="top start">
             <Dropdown.Menu
               onAction={(key) => {
-                if (key === "sign-out") {
+                if (key === "settings") {
+                  router.push("/settings");
+                } else if (key === "sign-out") {
                   signOut();
                 }
               }}
@@ -94,6 +100,13 @@ export function AdminShell({ email, children }: { email: string; children: React
                 <Header className="truncate">{email}</Header>
               </Dropdown.Section>
               <Separator />
+              <Dropdown.Item
+                id="settings"
+                textValue="Settings"
+              >
+                <Gear className="size-4 shrink-0 text-neutral-600" />
+                <Label>Settings</Label>
+              </Dropdown.Item>
               <Dropdown.Item
                 className="text-danger data-[hovered]:text-danger"
                 id="sign-out"

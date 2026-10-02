@@ -11,5 +11,11 @@ export const config = {
   // Real URL paths only — (admin) is a route group and never appears in the
   // actual request path. Deliberately excludes app/(public)/f/[shareToken] and
   // the rest of the public surface, which must stay fast and auth-free.
-  matcher: ["/dashboard/:path*", "/forms/:path*", "/team/:path*"],
+  matcher: [
+    "/dashboard/:path*",
+    "/forms/:path*",
+    "/team/:path*",
+    "/settings/:path*",
+    "/agents/:path*",
+  ],
 };
