@@ -23,7 +23,15 @@ export function traceSummary(entry: AgentTraceEntry): string {
     case "getWhatsAppTemplates":
       return `${Array.isArray(result.templates) ? result.templates.length : 0} template(s)`;
     case "sendWhatsAppTemplate":
+      if (Array.isArray(result.missing)) return `needs ${result.missing.length} detail(s) first`;
       return result.sent ? "sent via Zernio" : result.mode === "preview" ? "preview only" : "not sent";
+    case "getLeadProfile":
+      return result.exists ? `lead found${result.name ? `: ${String(result.name)}` : ""}` : "no lead yet";
+    case "saveLeadDetails": {
+      const saved = Array.isArray(result.saved) ? result.saved.length : 0;
+      const rejected = Array.isArray(result.rejected) ? result.rejected.length : 0;
+      return `saved ${saved + (result.savedName ? 1 : 0)} detail(s)${rejected ? `, ${rejected} rejected` : ""}`;
+    }
     default:
       return "done";
   }

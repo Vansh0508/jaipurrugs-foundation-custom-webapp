@@ -5,10 +5,13 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowRightFromSquare,
+  Comment,
   Comments,
+  FileText,
   Gear,
   House,
   LayoutSideContentLeft,
+  Person,
   Persons,
   SquareListUl,
 } from "@gravity-ui/icons";
@@ -18,9 +21,12 @@ import { OrgLogo } from "@/components/ui/org-logo";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: House },
+  { href: "/inbox", label: "Inbox", icon: Comment },
   { href: "/forms", label: "Forms", icon: SquareListUl },
-  { href: "/team", label: "Team", icon: Persons },
+  { href: "/leads", label: "Leads", icon: Person },
+  { href: "/templates", label: "WhatsApp Templates", icon: FileText },
   { href: "/agents", label: "AI Agent", icon: Comments },
+  { href: "/team", label: "Team", icon: Persons },
 ];
 
 export function AdminShell({ email, children }: { email: string; children: React.ReactNode }) {

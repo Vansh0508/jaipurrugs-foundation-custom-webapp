@@ -15,6 +15,12 @@ See [AGENTS.md](../../AGENTS.md) §5–§7. This phase adds a Mastra-powered Wha
 - Server actions: `src/lib/actions/agent.ts` (sessions, messages, `sendAgentMessage`) and `src/lib/actions/kb.ts` (article CRUD, sample seeding).
 - UI: `src/app/(admin)/agents/page.tsx` + `src/components/admin/agent/` — chat simulator (contact bar, WhatsApp-style chat, template preview cards, tool-trace panel) and knowledge base manager.
 
+## Knowledge base import and retrieval
+
+- **Import file** (AI Agent → Knowledge base): a Markdown file with one `## Title` heading per article and optional `category:` / `tags:` lines directly under it (parser: `src/lib/mastra/kb-import.ts`). Anything before the first `##` heading is ignored. Articles whose title already exists (case-insensitive) are **updated**, so a corrected file can be re-imported. Limits: 200 articles, 1 MB, 20,000 characters per article.
+- **Search** is Postgres full-text (English, OR'ed terms, title > tags > body). The `searchKnowledgeBase` tool returns each matched article's **full text** (capped at 2,500 characters), not the short highlighted snippet, so itineraries, price lists and policies reach the agent intact. Keep articles focused on one topic and under that cap, and put the words visitors actually use (synonyms) in `tags:`.
+- The agent can only answer what the knowledge base says. Where source material is contradictory or missing, write the article so the agent hands over to a person instead of picking a value.
+
 ## Security model — phone scoping
 
 The model is never trusted to enforce the data boundary:

@@ -17,5 +17,8 @@ export const config = {
     "/team/:path*",
     "/settings/:path*",
     "/agents/:path*",
+    "/leads/:path*",
+    "/templates/:path*",
+    "/inbox/:path*",
   ],
 };

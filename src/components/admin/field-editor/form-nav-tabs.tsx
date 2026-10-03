@@ -7,6 +7,7 @@ const TABS = [
   { key: "metrics", label: "Metrics", path: "metrics" },
   { key: "submissions", label: "Submissions", path: "submissions" },
   { key: "edit", label: "Edit", path: "edit" },
+  { key: "leads", label: "Lead sync", path: "leads" },
   { key: "insights", label: "AI Insights", path: "insights" },
 ] as const;
 

@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Plus, Sparkles, TrashBin } from "@gravity-ui/icons";
+import { ArrowUpFromLine, Pencil, Plus, Sparkles, TrashBin } from "@gravity-ui/icons";
 import { AlertDialog, Button, Chip, SearchField, toast } from "@heroui/react";
-import { deleteKbArticle, seedSampleKbArticles } from "@/lib/actions/kb";
+import { deleteKbArticle, importKbMarkdown, seedSampleKbArticles } from "@/lib/actions/kb";
 import { kbCategoryLabel } from "@/lib/mastra/kb-categories";
 import type { Json } from "@/lib/types/supabase";
 import { KbArticleModal } from "./kb-article-modal";
@@ -32,6 +32,8 @@ export function KnowledgeBaseManager({ articles }: { articles: KbArticle[] }) {
   const [pendingDelete, setPendingDelete] = useState<KbArticle | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -60,6 +62,30 @@ export function KnowledgeBaseManager({ articles }: { articles: KbArticle[] }) {
     router.refresh();
   }
 
+  async function handleImport(file: File | undefined) {
+    if (!file) return;
+    setIsImporting(true);
+    try {
+      const result = await importKbMarkdown(await file.text());
+      if (result.error) {
+        toast.danger(result.error);
+      } else {
+        const skipped = result.errors?.length ?? 0;
+        toast.success(
+          `Imported ${result.created ?? 0} new and updated ${result.updated ?? 0} article(s)` +
+            (skipped ? ` — ${skipped} skipped.` : "."),
+        );
+        router.refresh();
+      }
+      for (const issue of [...(result.errors ?? []), ...(result.warnings ?? [])].slice(0, 5)) {
+        toast.warning(`${issue.title}: ${issue.message}`);
+      }
+    } finally {
+      setIsImporting(false);
+      if (fileInput.current) fileInput.current.value = "";
+    }
+  }
+
   async function handleDelete() {
     if (!pendingDelete) return;
     setIsDeleting(true);
@@ -84,6 +110,17 @@ export function KnowledgeBaseManager({ articles }: { articles: KbArticle[] }) {
           </SearchField.Group>
         </SearchField>
         <div className="ml-auto flex gap-2">
+          <input
+            ref={fileInput}
+            accept=".md,.markdown,.txt,text/markdown,text/plain"
+            className="hidden"
+            type="file"
+            onChange={(e) => handleImport(e.target.files?.[0])}
+          />
+          <Button isPending={isImporting} variant="secondary" onPress={() => fileInput.current?.click()}>
+            <ArrowUpFromLine className="size-4" />
+            Import file
+          </Button>
           <Button isPending={isSeeding} variant="secondary" onPress={handleSeed}>
             <Sparkles className="size-4" />
             Add sample FAQs
@@ -94,6 +131,11 @@ export function KnowledgeBaseManager({ articles }: { articles: KbArticle[] }) {
           </Button>
         </div>
       </div>
+
+      <p className="text-xs text-muted">
+        Import a Markdown file: one <code>## Title</code> heading per article, with optional{" "}
+        <code>category:</code> and <code>tags:</code> lines under it. Articles whose title already exists are updated.
+      </p>
 
       {articles.some(isSample) ? (
         <p className="rounded-xl bg-warning/10 px-3 py-2 text-xs text-neutral-700">

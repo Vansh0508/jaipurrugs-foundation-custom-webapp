@@ -2,12 +2,18 @@ import "server-only";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import type { AgentToolContext } from "@/lib/mastra/context";
+import { redactPhone } from "@/lib/mastra/redact";
 
 const MAX_VALUE_LENGTH = 500;
 
-function compactValue(value: unknown): unknown {
-  if (typeof value === "string" && value.length > MAX_VALUE_LENGTH) {
-    return `${value.slice(0, MAX_VALUE_LENGTH)}…`;
+// Phone answers are withheld entirely: the agent never needs a number, and
+// identity is already bound server-side. Other text is scrubbed of the
+// contact's own number in case it was typed into a free-text answer.
+function compactValue(value: unknown, type: string | undefined, phone: string): unknown {
+  if (type === "phone") return "[hidden]";
+  if (typeof value === "string") {
+    const clean = redactPhone(value, phone);
+    return clean.length > MAX_VALUE_LENGTH ? `${clean.slice(0, MAX_VALUE_LENGTH)}…` : clean;
   }
   return value;
 }
@@ -39,7 +45,7 @@ export function createGetUserSubmissionsTool(ctx: AgentToolContext) {
         completedAt: row.completed_at,
         answers: (Array.isArray(row.answers) ? row.answers : []).map((answer) => {
           const a = answer as { label?: string | null; type?: string; value?: unknown };
-          return { question: a.label ?? "(untitled)", type: a.type, answer: compactValue(a.value) };
+          return { question: a.label ?? "(untitled)", type: a.type, answer: compactValue(a.value, a.type, ctx.phone) };
         }),
       }));
 

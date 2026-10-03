@@ -3,6 +3,7 @@ export const KB_CATEGORIES = [
   { id: "artisan_schemes", label: "Artisan schemes" },
   { id: "field_visits", label: "Field visits" },
   { id: "foundation_info", label: "Foundation info" },
+  { id: "rural_experience", label: "Rural Experience" },
   { id: "general", label: "General" },
 ] as const;
 

@@ -461,3 +461,241 @@ export async function sendWhatsAppTemplate(params: {
     };
   }
 }
+
+/**
+ * Submit a custom template to Meta for review (status starts PENDING).
+ * See https://docs.zernio.com/whatsapp/create-whatsapp-template
+ */
+export async function createWhatsAppTemplate(params: {
+  accountId: string;
+  name: string;
+  category: string;
+  language: string;
+  parameterFormat: "POSITIONAL" | "NAMED";
+  components: Record<string, unknown>[];
+}): Promise<{ success: boolean; template?: { id: string; status: string }; error?: string }> {
+  const config = getZernioConfig();
+
+  if (!config.isConfigured || !config.apiKey) {
+    return { success: false, error: "ZERNIO_API_KEY is not configured." };
+  }
+
+  try {
+    const response = await fetch(`${ZERNIO_BASE_URL}/whatsapp/templates`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        accountId: params.accountId,
+        name: params.name,
+        category: params.category,
+        language: params.language,
+        parameter_format: params.parameterFormat,
+        components: params.components,
+      }),
+    });
+
+    if (!response.ok) {
+      return { success: false, error: await readZernioError(response) };
+    }
+
+    const data = await response.json();
+    const template = data.template ?? {};
+    return {
+      success: true,
+      template: { id: String(template.id ?? ""), status: String(template.status ?? "PENDING") },
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to create WhatsApp template",
+    };
+  }
+}
+
+/**
+ * Delete one language variant of a template. Meta keeps the name reserved
+ * for 30 days afterwards.
+ * See https://docs.zernio.com/whatsapp/delete-whatsapp-template
+ */
+export async function deleteWhatsAppTemplate(params: {
+  accountId: string;
+  name: string;
+  language: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const config = getZernioConfig();
+
+  if (!config.isConfigured || !config.apiKey) {
+    return { success: false, error: "ZERNIO_API_KEY is not configured." };
+  }
+
+  try {
+    const url = new URL(`${ZERNIO_BASE_URL}/whatsapp/templates/${encodeURIComponent(params.name)}`);
+    url.searchParams.set("accountId", params.accountId);
+    url.searchParams.set("language", params.language);
+
+    const response = await fetch(url.toString(), {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      return { success: false, error: await readZernioError(response) };
+    }
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to delete WhatsApp template",
+    };
+  }
+}
+
+/**
+ * Free-form reply inside an existing conversation. WhatsApp only accepts this
+ * within the 24-hour customer-service window (Meta returns platform_api_error
+ * outside it) — callers check the window first.
+ * See https://docs.zernio.com/messages/send-inbox-message
+ */
+export async function sendInboxMessage(params: {
+  accountId: string;
+  conversationId: string;
+  text: string;
+  /** Makes a retried send safe: same key + body replays instead of resending. */
+  idempotencyKey: string;
+}): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const config = getZernioConfig();
+
+  if (!config.isConfigured || !config.apiKey) {
+    return { success: false, error: "ZERNIO_API_KEY is not configured." };
+  }
+
+  try {
+    const response = await fetch(
+      `${ZERNIO_BASE_URL}/inbox/conversations/${encodeURIComponent(params.conversationId)}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${config.apiKey}`,
+          "Content-Type": "application/json",
+          "Idempotency-Key": params.idempotencyKey,
+        },
+        body: JSON.stringify({ accountId: params.accountId, message: params.text }),
+      },
+    );
+
+    if (!response.ok) {
+      return { success: false, error: await readZernioError(response) };
+    }
+
+    const data = await response.json();
+    const payload = data.data ?? data;
+    return { success: true, messageId: payload.messageId ? String(payload.messageId) : undefined };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Failed to send message" };
+  }
+}
+
+export const INBOX_WEBHOOK_EVENTS = [
+  "message.received",
+  "message.sent",
+  "message.delivered",
+  "message.read",
+  "message.failed",
+] as const;
+
+export interface ZernioWebhook {
+  id: string;
+  name: string;
+  url: string;
+  events: string[];
+  isActive: boolean;
+  failureCount?: number;
+}
+
+/** See https://docs.zernio.com/webhooks/get-webhook-settings */
+export async function listWebhooks(): Promise<{ success: boolean; webhooks: ZernioWebhook[]; error?: string }> {
+  const config = getZernioConfig();
+  if (!config.isConfigured || !config.apiKey) {
+    return { success: false, webhooks: [], error: "ZERNIO_API_KEY is not configured." };
+  }
+
+  try {
+    const response = await fetch(`${ZERNIO_BASE_URL}/webhooks/settings`, {
+      headers: { Authorization: `Bearer ${config.apiKey}` },
+      cache: "no-store",
+    });
+    if (!response.ok) return { success: false, webhooks: [], error: await readZernioError(response) };
+
+    const data = await response.json();
+    const raw: unknown[] = Array.isArray(data.webhooks) ? data.webhooks : Array.isArray(data) ? data : [];
+    const webhooks = raw
+      .filter((w): w is Record<string, unknown> => typeof w === "object" && w !== null)
+      .map((w) => ({
+        id: String(w._id ?? w.webhookId ?? w.id ?? ""),
+        name: String(w.name ?? ""),
+        url: String(w.url ?? ""),
+        events: Array.isArray(w.events) ? w.events.map(String) : [],
+        isActive: Boolean(w.isActive ?? true),
+        failureCount: typeof w.failureCount === "number" ? w.failureCount : undefined,
+      }));
+    return { success: true, webhooks };
+  } catch (err) {
+    return { success: false, webhooks: [], error: err instanceof Error ? err.message : "Failed to list webhooks" };
+  }
+}
+
+/**
+ * Register this app's inbox endpoint. Zernio signs every delivery with
+ * `secret` (HMAC-SHA256 of the raw body, X-Zernio-Signature).
+ * See https://docs.zernio.com/webhooks/create-webhook-settings
+ */
+export async function createWebhook(params: {
+  name: string;
+  url: string;
+  secret: string;
+  events: readonly string[];
+}): Promise<{ success: boolean; webhook?: ZernioWebhook; error?: string }> {
+  const config = getZernioConfig();
+  if (!config.isConfigured || !config.apiKey) {
+    return { success: false, error: "ZERNIO_API_KEY is not configured." };
+  }
+
+  try {
+    const response = await fetch(`${ZERNIO_BASE_URL}/webhooks/settings`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: params.name,
+        url: params.url,
+        secret: params.secret,
+        events: params.events,
+        profileIds: [config.profileId],
+      }),
+    });
+    if (!response.ok) return { success: false, error: await readZernioError(response) };
+
+    const data = await response.json();
+    const w = data.webhook ?? {};
+    return {
+      success: true,
+      webhook: {
+        id: String(w._id ?? ""),
+        name: String(w.name ?? params.name),
+        url: String(w.url ?? params.url),
+        events: Array.isArray(w.events) ? w.events.map(String) : [...params.events],
+        isActive: Boolean(w.isActive ?? true),
+      },
+    };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Failed to create webhook" };
+  }
+}

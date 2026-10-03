@@ -19,14 +19,11 @@ import type {
 } from "@/lib/mastra/types";
 import { createClient } from "@/lib/supabase/server";
 import type { Json, Tables } from "@/lib/types/supabase";
-import { getWhatsAppAccounts, type WhatsAppAccount } from "@/lib/zernio/client";
+import { pickWhatsAppAccount } from "@/lib/zernio/account";
+import { getWhatsAppAccounts } from "@/lib/zernio/client";
 
 // How many earlier messages are replayed to the model each turn.
 const HISTORY_LIMIT = 20;
-
-function pickWhatsAppAccount(accounts: WhatsAppAccount[]) {
-  return accounts.find((a) => a.isActive) ?? accounts[0] ?? null;
-}
 
 function toSession(row: Tables<"agent_chat_sessions">): AgentSession {
   return { id: row.id, phoneNumber: row.phone_number, title: row.title, updatedAt: row.updated_at };
@@ -166,6 +163,7 @@ export async function sendAgentMessage(input: z.input<typeof sendSchema>): Promi
     phone: session.phone_number,
     supabase,
     liveSend,
+    channel: "simulator",
     getWhatsAppAccountId: () => {
       accountIdPromise ??= getWhatsAppAccounts().then(
         (r) => pickWhatsAppAccount(r.accounts)?.accountId ?? null,

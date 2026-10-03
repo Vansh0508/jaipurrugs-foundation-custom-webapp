@@ -1,18 +1,31 @@
 import "server-only";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { leadFieldLabel } from "@/lib/leads/fields";
 import type { AgentToolContext } from "@/lib/mastra/context";
+import type { LeadLoader } from "@/lib/mastra/lead-context";
 import { formatPhone, toWhatsAppParticipantId } from "@/lib/mastra/phone";
+import {
+  bindingStatus,
+  parseBindings,
+  resolveTemplateParams,
+  type TemplateVariableBinding,
+} from "@/lib/whatsapp/bindings";
 import {
   renderTemplatePreview,
   summarizeTemplate,
   type TemplateSummary,
-} from "@/lib/mastra/templates";
+} from "@/lib/whatsapp/templates";
 import { listWhatsAppTemplates, sendWhatsAppTemplate } from "@/lib/zernio/client";
 
-// Both tools share one approved-template lookup per turn.
+interface LoadedTemplate {
+  summary: TemplateSummary;
+  bindings: TemplateVariableBinding[];
+}
+
+// Approved templates + their variable bindings, loaded once per turn.
 function createTemplateLoader(ctx: AgentToolContext) {
-  let cached: Promise<{ templates: TemplateSummary[]; error?: string }> | null = null;
+  let cached: Promise<{ templates: LoadedTemplate[]; error?: string }> | null = null;
 
   return () => {
     cached ??= (async () => {
@@ -20,67 +33,121 @@ function createTemplateLoader(ctx: AgentToolContext) {
       if (!accountId) {
         return { templates: [], error: "No WhatsApp account is connected in Settings." };
       }
-      const result = await listWhatsAppTemplates(accountId, { status: "APPROVED" });
+      const [result, { data: bindingRows }] = await Promise.all([
+        listWhatsAppTemplates(accountId, { status: "APPROVED" }),
+        ctx.supabase.from("whatsapp_template_bindings").select("template_name, language, variables"),
+      ]);
       if (!result.success) {
         return { templates: [], error: result.error ?? "Could not load templates." };
       }
       return {
         templates: result.templates
           .filter((t) => t.status === "APPROVED")
-          .map(summarizeTemplate),
+          .map((t) => ({
+            summary: summarizeTemplate(t),
+            bindings: parseBindings(
+              (bindingRows ?? []).find((b) => b.template_name === t.name && b.language === t.language)?.variables,
+            ),
+          })),
       };
     })();
     return cached;
   };
 }
 
-export function createWhatsAppTemplateTools(ctx: AgentToolContext) {
+export function createWhatsAppTemplateTools(ctx: AgentToolContext, leads: LeadLoader) {
   const loadTemplates = createTemplateLoader(ctx);
 
   const getWhatsAppTemplates = createTool({
     id: "get-whatsapp-templates",
     description:
-      "List the approved WhatsApp message templates the foundation can send, with each template's " +
-      "language, its text, and the variables it needs (in order).",
+      "List the approved WhatsApp templates the foundation can send, what each one says, and which " +
+      "of the contact's details it needs. `missingForThisContact` lists details you'd have to collect " +
+      "(and save) before sending it.",
     inputSchema: z.object({}),
     execute: async () => {
-      const { templates, error } = await loadTemplates();
+      const [{ templates, error }, { lead, attributes }] = await Promise.all([loadTemplates(), leads.get()]);
       if (error) return { templates: [], error };
+
       return {
-        templates: templates.map((t) => ({
-          name: t.name,
-          language: t.language,
-          category: t.category,
-          text: t.bodyText,
-          variables: t.variables.map((v) => `${v.index + 1}. ${v.source} {{${v.placeholder}}}`),
-        })),
+        templates: templates.map(({ summary, bindings }) => {
+          const status = bindingStatus(summary, bindings, attributes);
+          const resolved = resolveTemplateParams(summary, bindings, lead, attributes);
+          return {
+            name: summary.name,
+            language: summary.language,
+            category: summary.category,
+            text: summary.bodyText,
+            usesDetails: [...new Set(bindings.map((b) => leadFieldLabel(b.field, attributes)))],
+            sendable: status.ready,
+            ...(status.ready ? {} : { notSendableReason: "Its variables aren't set up yet in Templates." }),
+            missingForThisContact: resolved.ok ? [] : resolved.missing.map((m) => m.label),
+          };
+        }),
       };
+    },
+  });
+
+  // The model learns whether it worked and which template went out — never
+  // the recipient, the filled values or the rendered text, any of which can
+  // contain the contact's number. The raw result (with those) stays in the
+  // staff-visible tool trace.
+  type SendResult = {
+    sent: boolean;
+    mode?: "preview" | "live";
+    templateName?: string;
+    error?: string;
+    missing?: unknown;
+    note?: string;
+  };
+  const toModel = (output: SendResult) => ({
+    type: "json" as const,
+    value: {
+      sent: output.sent,
+      ...(output.mode ? { mode: output.mode } : {}),
+      ...(output.templateName ? { templateName: output.templateName } : {}),
+      ...(output.error ? { error: output.error } : {}),
+      ...(output.missing ? { missing: output.missing } : {}),
+      ...(output.note ? { note: output.note } : {}),
     },
   });
 
   const sendWhatsAppTemplateTool = createTool({
     id: "send-whatsapp-template",
     description:
-      "Send one approved WhatsApp template to the contact you are chatting with. Takes no phone " +
-      "number: it always goes to the current contact. Call get-whatsapp-templates first and pass " +
-      "exactly one value per variable, in order.",
+      "Send one approved WhatsApp template to the contact you are chatting with. Every variable is " +
+      "filled automatically from the contact's saved details — you only choose the template. If " +
+      "details are missing, the result lists them: ask the contact, save them with save-lead-details, " +
+      "then call this again. Takes no phone number: it always goes to the current contact.",
     inputSchema: z.object({
       templateName: z.string().min(1),
       language: z.string().min(2).describe("The template's language code, e.g. en or en_US."),
-      params: z.array(z.string().max(500)).max(20).describe("Variable values in template order."),
     }),
-    execute: async ({ templateName, language, params }) => {
-      const { templates, error } = await loadTemplates();
+    execute: async ({ templateName, language }) => {
+      const [{ templates, error }, { lead, attributes }] = await Promise.all([loadTemplates(), leads.get()]);
       if (error) return { sent: false, error };
 
-      const template = templates.find((t) => t.name === templateName && t.language === language);
+      const template = templates.find((t) => t.summary.name === templateName && t.summary.language === language);
       if (!template) {
         return { sent: false, error: `No approved template "${templateName}" (${language}).` };
       }
-      if (params.length !== template.variables.length) {
+
+      const resolved = resolveTemplateParams(template.summary, template.bindings, lead, attributes);
+      if (!resolved.ok) {
+        if (resolved.unbound.length > 0) {
+          return {
+            sent: false,
+            error: `"${templateName}" isn't set up yet: a team member needs to choose which lead details fill its variables in Templates.`,
+          };
+        }
         return {
           sent: false,
-          error: `"${templateName}" needs ${template.variables.length} value(s), got ${params.length}.`,
+          missing: resolved.missing.map((m) => ({
+            field: m.field.startsWith("attr:") ? m.field.slice(5) : m.field,
+            label: m.label,
+            whatToAsk: m.description ?? undefined,
+          })),
+          note: "Ask the contact for these details, save them with save-lead-details, then send again.",
         };
       }
 
@@ -89,7 +156,8 @@ export function createWhatsAppTemplateTools(ctx: AgentToolContext) {
         return { sent: false, error: "The contact's number can't be used for WhatsApp." };
       }
 
-      const preview = renderTemplatePreview(template, params);
+      const params = resolved.params;
+      const preview = renderTemplatePreview(template.summary, params);
       const recipient = formatPhone(ctx.phone);
 
       if (!ctx.liveSend) {
@@ -99,6 +167,7 @@ export function createWhatsAppTemplateTools(ctx: AgentToolContext) {
           recipient,
           templateName,
           language,
+          params,
           preview,
           note: "Preview only — live sending is off in the workbench, so nothing was delivered.",
         };
@@ -117,16 +186,26 @@ export function createWhatsAppTemplateTools(ctx: AgentToolContext) {
 
       if (!result.success) return { sent: false, mode: "live" as const, error: result.error };
 
+      await ctx.onTemplateSent?.({
+        templateName,
+        language,
+        preview,
+        platformMessageId: result.messageId,
+        zernioConversationId: result.conversationId,
+      });
+
       return {
         sent: true,
         mode: "live" as const,
         recipient,
         templateName,
         language,
+        params,
         preview,
         conversationId: result.conversationId,
       };
     },
+    toModelOutput: (output) => toModel(output as SendResult),
   });
 
   return { getWhatsAppTemplates, sendWhatsAppTemplate: sendWhatsAppTemplateTool };
