@@ -2,7 +2,22 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/types/supabase";
 
-const ADMIN_PATH_PREFIXES = ["/dashboard", "/forms", "/team", "/settings"];
+// Keep in sync with `config.matcher` in src/proxy.ts and AGENTS.md §7.
+const ADMIN_PATH_PREFIXES = [
+  "/dashboard",
+  "/forms",
+  "/team",
+  "/settings",
+  "/agents",
+  "/leads",
+  "/templates",
+  "/inbox",
+  "/calendar",
+  "/trips",
+  "/villages",
+  "/partners",
+  "/messaging",
+];
 
 function isAdminPath(pathname: string) {
   return ADMIN_PATH_PREFIXES.some(

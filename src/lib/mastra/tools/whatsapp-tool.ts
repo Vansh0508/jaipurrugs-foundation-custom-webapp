@@ -7,6 +7,7 @@ import type { LeadLoader } from "@/lib/mastra/lead-context";
 import { formatPhone, toWhatsAppParticipantId } from "@/lib/mastra/phone";
 import {
   bindingStatus,
+  bindingsUseVisitFields,
   parseBindings,
   resolveTemplateParams,
   type TemplateVariableBinding,
@@ -72,6 +73,7 @@ export function createWhatsAppTemplateTools(ctx: AgentToolContext, leads: LeadLo
       return {
         templates: templates.map(({ summary, bindings }) => {
           const status = bindingStatus(summary, bindings, attributes);
+          const scheduledOnly = bindingsUseVisitFields(bindings);
           const resolved = resolveTemplateParams(summary, bindings, lead, attributes);
           return {
             name: summary.name,
@@ -79,9 +81,13 @@ export function createWhatsAppTemplateTools(ctx: AgentToolContext, leads: LeadLo
             category: summary.category,
             text: summary.bodyText,
             usesDetails: [...new Set(bindings.map((b) => leadFieldLabel(b.field, attributes)))],
-            sendable: status.ready,
-            ...(status.ready ? {} : { notSendableReason: "Its variables aren't set up yet in Templates." }),
-            missingForThisContact: resolved.ok ? [] : resolved.missing.map((m) => m.label),
+            sendable: status.ready && !scheduledOnly,
+            ...(scheduledOnly
+              ? { notSendableReason: "Sent automatically by the visit messages — you can't send it yourself." }
+              : status.ready
+                ? {}
+                : { notSendableReason: "Its variables aren't set up yet in Templates." }),
+            missingForThisContact: scheduledOnly || resolved.ok ? [] : resolved.missing.map((m) => m.label),
           };
         }),
       };
@@ -130,6 +136,13 @@ export function createWhatsAppTemplateTools(ctx: AgentToolContext, leads: LeadLo
       const template = templates.find((t) => t.summary.name === templateName && t.summary.language === language);
       if (!template) {
         return { sent: false, error: `No approved template "${templateName}" (${language}).` };
+      }
+
+      if (bindingsUseVisitFields(template.bindings)) {
+        return {
+          sent: false,
+          error: `"${templateName}" is sent automatically for a visit and can't be sent from a chat.`,
+        };
       }
 
       const resolved = resolveTemplateParams(template.summary, template.bindings, lead, attributes);

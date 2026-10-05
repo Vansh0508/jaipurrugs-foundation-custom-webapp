@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   isLeadFieldRef,
+  isVisitFieldRef,
   leadFieldLabel,
   readLeadField,
   type Lead,
@@ -8,6 +9,7 @@ import {
   type LeadFieldRef,
 } from "@/lib/leads/fields";
 import type { TemplateSummary } from "@/lib/whatsapp/templates";
+import { readVisitField, type VisitContext } from "@/lib/whatsapp/visit-fields";
 
 /**
  * Where one template variable's value comes from. Meta/Zernio only know
@@ -38,6 +40,14 @@ export function parseBindings(raw: unknown): TemplateVariableBinding[] {
     const parsed = bindingSchema.safeParse(item);
     return parsed.success ? [parsed.data as TemplateVariableBinding] : [];
   });
+}
+
+/**
+ * True when a variable is filled from the visit. Such a template can only be sent by the visit
+ * scheduler (which knows the visit), so the agent must never send it on its own.
+ */
+export function bindingsUseVisitFields(bindings: TemplateVariableBinding[]): boolean {
+  return bindings.some((b) => isVisitFieldRef(b.field));
 }
 
 export interface BindingStatus {
@@ -86,6 +96,8 @@ export function resolveTemplateParams(
   bindings: TemplateVariableBinding[],
   lead: Pick<Lead, "name" | "phone" | "attributes"> | null,
   attributes: Pick<LeadAttribute, "key" | "label" | "description" | "is_active">[],
+  /** Set by the visit scheduler. Without it, `visit:` variables count as missing. */
+  visit?: VisitContext | null,
 ): ResolveResult {
   const activeKeys = new Set(attributes.filter((a) => a.is_active).map((a) => a.key));
   const params: string[] = [];
@@ -98,7 +110,10 @@ export function resolveTemplateParams(
       unbound.push(variable.key);
       continue;
     }
-    const value = readLeadField(lead, binding.field, activeKeys) ?? binding.fallback;
+    const fromSource = isVisitFieldRef(binding.field)
+      ? readVisitField(visit, binding.field)
+      : readLeadField(lead, binding.field, activeKeys);
+    const value = fromSource ?? binding.fallback;
     if (value === null) {
       if (!missing.some((m) => m.field === binding.field)) {
         const attr = attributes.find((a) => `attr:${a.key}` === binding.field);

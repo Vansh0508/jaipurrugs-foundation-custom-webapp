@@ -31,6 +31,17 @@ export interface InboxThread {
   leadLists: { id: string; name: string }[];
   memories: LeadMemory[];
   attributes: LeadAttribute[];
+  /** Visits this contact is a guest on, most recent first. */
+  visits: ContactVisit[];
+}
+
+export interface ContactVisit {
+  id: string;
+  visitType: string;
+  visitDate: string | null;
+  startTime: string | null;
+  status: string;
+  guestStatus: string;
 }
 
 type Result = { error?: string };
@@ -48,7 +59,7 @@ export async function getInboxThread(conversationId: string): Promise<InboxThrea
   const { supabase, conversation } = await loadConversation(conversationId);
   if (!conversation) return null;
 
-  const [{ data: messages }, { data: attributes }, leadResult, memoriesResult, listsResult] = await Promise.all([
+  const [{ data: messages }, { data: attributes }, leadResult, memoriesResult, listsResult, visitsResult] = await Promise.all([
     supabase
       .from("whatsapp_messages")
       .select("*")
@@ -65,7 +76,35 @@ export async function getInboxThread(conversationId: string): Promise<InboxThrea
     conversation.lead_id
       ? supabase.from("lead_list_members").select("lead_lists(id, name)").eq("lead_id", conversation.lead_id)
       : Promise.resolve({ data: [] }),
+    conversation.lead_id
+      ? supabase
+          .from("visit_guests")
+          .select("status, visits(id, visit_type, visit_date, start_time, status)")
+          .eq("lead_id", conversation.lead_id)
+      : Promise.resolve({ data: [] }),
   ]);
+
+  const visits: ContactVisit[] = (
+    (visitsResult.data ?? []) as {
+      status: string;
+      visits: { id: string; visit_type: string; visit_date: string | null; start_time: string | null; status: string } | null;
+    }[]
+  )
+    .flatMap((row) =>
+      row.visits
+        ? [
+            {
+              id: row.visits.id,
+              visitType: row.visits.visit_type,
+              visitDate: row.visits.visit_date,
+              startTime: row.visits.start_time,
+              status: row.visits.status,
+              guestStatus: row.status,
+            },
+          ]
+        : [],
+    )
+    .sort((a, b) => (b.visitDate ?? "9999").localeCompare(a.visitDate ?? "9999"));
 
   const leadLists = ((listsResult.data ?? []) as { lead_lists: unknown }[]).flatMap((m) => {
     const list = m.lead_lists as { id: string; name: string } | { id: string; name: string }[] | null;
@@ -79,6 +118,7 @@ export async function getInboxThread(conversationId: string): Promise<InboxThrea
     leadLists,
     memories: memoriesResult.data ?? [],
     attributes: attributes ?? [],
+    visits,
   };
 }
 

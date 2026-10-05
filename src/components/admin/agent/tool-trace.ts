@@ -20,6 +20,14 @@ export function traceSummary(entry: AgentTraceEntry): string {
       return `found ${Number(result.found ?? 0)} submission(s)`;
     case "searchKnowledgeBase":
       return `${Number(result.matched ?? 0)} article(s) matched`;
+    case "getMyVisits":
+      return `found ${Number(result.found ?? 0)} visit(s)`;
+    case "getVisitItinerary":
+      return result.found ? "itinerary loaded" : "no matching visit";
+    case "getExperiences":
+      return `${Number(result.found ?? 0)} experience(s)`;
+    case "getVillages":
+      return `${Number(result.found ?? 0)} village(s)`;
     case "getWhatsAppTemplates":
       return `${Array.isArray(result.templates) ? result.templates.length : 0} template(s)`;
     case "sendWhatsAppTemplate":

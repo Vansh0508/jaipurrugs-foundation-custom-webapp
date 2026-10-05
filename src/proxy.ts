@@ -20,5 +20,10 @@ export const config = {
     "/leads/:path*",
     "/templates/:path*",
     "/inbox/:path*",
+    "/calendar/:path*",
+    "/trips/:path*",
+    "/villages/:path*",
+    "/partners/:path*",
+    "/messaging/:path*",
   ],
 };

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ArrowRight, CircleCheck } from "@gravity-ui/icons";
 import { Button, toast } from "@heroui/react";
+import { saveFeedbackAnswers } from "@/lib/actions/feedback";
 import {
   completeSubmission,
   getOrCreateSubmission,
@@ -17,19 +18,42 @@ import { groupFieldsIntoPages } from "@/lib/forms/public-form";
 import type { Tables } from "@/lib/types/supabase";
 import { PublicFieldInput } from "./public-field-input";
 
+/**
+ * Set when the form is opened from a guest's personal feedback link (/fb/[token]).
+ * In that mode the browser-generated submitter token is not used: answers are saved
+ * through the token-scoped RPCs, and the submission is tied to that guest's visit.
+ */
+export type FeedbackMode = {
+  token: string;
+  initialAnswers: { field_id: string; value: unknown }[];
+  completed: boolean;
+};
+
+const FEEDBACK_ERRORS: Record<string, string> = {
+  not_found: "This feedback link is no longer valid.",
+  invalid_field: "Something on this form changed. Please reload the page and try again.",
+  invalid_request: "Something went wrong. Please try again.",
+};
+
 export function PublicFormRenderer({
   form,
   fields,
+  feedback,
 }: {
   form: Pick<Tables<"forms">, "id" | "title" | "description" | "settings">;
   fields: Tables<"form_fields">[];
+  feedback?: FeedbackMode;
 }) {
+  const isFeedback = Boolean(feedback);
   const [submitterToken, setSubmitterToken] = useState<string | null>(null);
-  const [submissionId, setSubmissionId] = useState<string | null>(null);
+  // Feedback mode has no submission row id on the client; this placeholder only satisfies the field inputs.
+  const [submissionId, setSubmissionId] = useState<string | null>(feedback ? "feedback" : null);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
-  const [answersMap, setAnswersMap] = useState<Record<string, unknown>>({});
+  const [answersMap, setAnswersMap] = useState<Record<string, unknown>>(() =>
+    feedback ? Object.fromEntries(feedback.initialAnswers.map((a) => [a.field_id, a.value])) : {},
+  );
   const [isSaving, setIsSaving] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(feedback?.completed ?? false);
 
   const settings = (form.settings as FormSettings) ?? {};
   const logoUrl = settings.logo_url ?? null;
@@ -44,6 +68,7 @@ export function PublicFormRenderer({
 
   // Client-side submitter token persistence in localStorage for tab recovery
   useEffect(() => {
+    if (isFeedback) return;
     const storageKey = `form_submitter_token_${form.id}`;
     let token = localStorage.getItem(storageKey);
     if (!token) {
@@ -61,11 +86,11 @@ export function PublicFormRenderer({
       localStorage.setItem(storageKey, token);
     }
     setSubmitterToken(token);
-  }, [form.id]);
+  }, [form.id, isFeedback]);
 
   // Retrieve or create in_progress submission row
   useEffect(() => {
-    if (!submitterToken) return;
+    if (isFeedback || !submitterToken) return;
 
     getOrCreateSubmission(form.id, submitterToken)
       .then(({ submission, answers }) => {
@@ -84,7 +109,7 @@ export function PublicFormRenderer({
       .catch(() => {
         toast.danger("Could not initialize form session.");
       });
-  }, [form.id, submitterToken]);
+  }, [form.id, submitterToken, isFeedback]);
 
   function handleFieldChange(fieldId: string, value: unknown) {
     setAnswersMap((prev) => ({ ...prev, [fieldId]: value }));
@@ -143,13 +168,25 @@ export function PublicFormRenderer({
 
   async function handleNextPage() {
     if (!validateCurrentPage()) return;
-    if (!submissionId || !submitterToken) return;
+    if (!feedback && (!submissionId || !submitterToken)) return;
 
     setIsSaving(true);
     try {
       const answersPayload = getPageAnswerInputs(currentPage.fields);
       if (answersPayload.length > 0) {
-        await saveProgressiveAnswers(submissionId, submitterToken, answersPayload);
+        if (feedback) {
+          const saved = await saveFeedbackAnswers(
+            feedback.token,
+            answersPayload.map((a) => ({ field_id: a.field_id, value: a.value })),
+          );
+          if (!saved.ok) {
+            if (saved.error === "already_completed") setIsSubmitted(true);
+            else toast.danger(FEEDBACK_ERRORS[saved.error ?? ""] ?? "Could not save progress. Please check connection.");
+            return;
+          }
+        } else {
+          await saveProgressiveAnswers(submissionId!, submitterToken!, answersPayload);
+        }
       }
       setCurrentPageIndex((prev) => Math.min(pages.length - 1, prev + 1));
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -162,6 +199,30 @@ export function PublicFormRenderer({
 
   async function handleSubmit() {
     if (!validateCurrentPage()) return;
+
+    if (feedback) {
+      setIsSaving(true);
+      try {
+        const result = await saveFeedbackAnswers(
+          feedback.token,
+          getAllAnswerInputs().map((a) => ({ field_id: a.field_id, value: a.value })),
+          true,
+        );
+        if (result.ok || result.error === "already_completed") {
+          setIsSubmitted(true);
+          if (result.ok) toast.success("Thank you for your feedback!");
+        } else if (result.error === "missing_required") {
+          toast.danger(`Please answer: "${result.missing?.[0] ?? "all required questions"}"`);
+        } else {
+          toast.danger(FEEDBACK_ERRORS[result.error ?? ""] ?? "Submission failed. Please try again.");
+        }
+      } catch {
+        toast.danger("Submission failed. Please try again.");
+      } finally {
+        setIsSaving(false);
+      }
+      return;
+    }
 
     let currentSubmissionId = submissionId;
     let currentToken = submitterToken;

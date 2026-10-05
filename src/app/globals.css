@@ -3,15 +3,76 @@
 
 /*
  * Light mode only — this app has no dark theme or theme toggle (see AGENTS.md).
- * Colors come entirely from HeroUI's default (light) theme tokens; do not add a
- * `prefers-color-scheme: dark` override or redefine --background/--foreground here.
+ * Colors come from HeroUI's default (light) theme tokens; do not add a
+ * `prefers-color-scheme: dark` override, a `.dark` block, or redefine
+ * --background/--foreground here.
+ *
+ * The only tokens added below are the --chart-* set used by the BKLit UI charts
+ * in src/components/charts (installed with the shadcn CLI). The CLI also writes a
+ * `.dark` block and a `@custom-variant dark`; those are deliberately not kept.
  */
 
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Expose the chart tokens as Tailwind colors (bg-chart-grid, text-chart-label…). */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-background: var(--chart-background);
+  --color-chart-foreground: var(--chart-foreground);
+  --color-chart-foreground-muted: var(--chart-foreground-muted);
+  --color-chart-crosshair: var(--chart-crosshair);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-label: var(--chart-label);
+  --color-chart-tooltip-background: var(--chart-tooltip-background);
+  --color-chart-tooltip-foreground: var(--chart-tooltip-foreground);
+  --color-chart-tooltip-muted: var(--chart-tooltip-muted);
+  --color-chart-marker-background: var(--chart-marker-background);
+  --color-chart-marker-border: var(--chart-marker-border);
+  --color-chart-marker-foreground: var(--chart-marker-foreground);
+  --color-chart-scale-01: var(--chart-scale-01);
+  --color-chart-scale-02: var(--chart-scale-02);
+  --color-chart-scale-03: var(--chart-scale-03);
+  --color-chart-scale-04: var(--chart-scale-04);
+  --color-chart-scale-05: var(--chart-scale-05);
+  --color-chart-scale-pattern-color: var(--chart-scale-pattern-color);
 }
 
 body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+:root {
+  /* Categorical series colors: the HeroUI accent blue first, then hues of similar lightness. */
+  --chart-1: var(--accent);
+  --chart-2: oklch(0.68 0.12 190);
+  --chart-3: var(--warning);
+  --chart-4: oklch(0.62 0.18 295);
+  --chart-5: oklch(0.66 0.19 15);
+  --chart-background: oklch(1 0 0);
+  --chart-foreground: oklch(0.145 0.004 285);
+  --chart-foreground-muted: var(--muted);
+  --chart-line-primary: var(--chart-1);
+  --chart-line-secondary: var(--chart-2);
+  --chart-crosshair: var(--muted);
+  --chart-grid: oklch(0.92 0 0);
+  --chart-brush-border: var(--chart-grid);
+  --chart-tooltip-background: oklch(0.21 0.006 285 / 0.88);
+  --chart-tooltip-foreground: oklch(0.985 0 0);
+  --chart-tooltip-muted: oklch(0.72 0.01 260);
+  --chart-marker-background: oklch(0.97 0.005 260);
+  --chart-marker-border: oklch(0.85 0.01 260);
+  --chart-marker-foreground: oklch(0.3 0.01 260);
+  --chart-label: oklch(0.45 0.01 260);
+  /* Sequential scale (heatmap / choropleth). */
+  --chart-scale-01: oklch(0.98 0.003 106);
+  --chart-scale-02: oklch(0.92 0.008 106);
+  --chart-scale-03: oklch(0.82 0.015 106);
+  --chart-scale-04: oklch(0.68 0.02 106);
+  --chart-scale-05: oklch(0.55 0.025 106);
+  --chart-scale-pattern-color: oklch(0.96 0.005 106);
 }

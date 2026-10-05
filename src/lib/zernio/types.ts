@@ -58,4 +58,8 @@ export interface SendTemplateResult {
   conversationId?: string;
   messageId?: string;
   error?: string;
+  /** HTTP status when Zernio answered with an error (a definite rejection). */
+  status?: number;
+  /** True when there was no answer at all (timeout, network): the message may or may not have been sent. */
+  ambiguous?: boolean;
 }

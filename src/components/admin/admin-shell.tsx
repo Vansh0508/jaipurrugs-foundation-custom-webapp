@@ -5,28 +5,49 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowRightFromSquare,
+  Bell,
+  Briefcase,
+  Calendar,
   Comment,
   Comments,
   FileText,
   Gear,
   House,
   LayoutSideContentLeft,
+  MapPin,
   Person,
   Persons,
   SquareListUl,
+  Suitcase,
 } from "@gravity-ui/icons";
 import { Avatar, Button, Dropdown, Header, Label, Separator, Toast } from "@heroui/react";
 import { signOut } from "@/lib/actions/auth";
 import { OrgLogo } from "@/components/ui/org-logo";
 
-const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard", icon: House },
-  { href: "/inbox", label: "Inbox", icon: Comment },
-  { href: "/forms", label: "Forms", icon: SquareListUl },
-  { href: "/leads", label: "Leads", icon: Person },
-  { href: "/templates", label: "WhatsApp Templates", icon: FileText },
-  { href: "/agents", label: "AI Agent", icon: Comments },
-  { href: "/team", label: "Team", icon: Persons },
+const NAV_GROUPS: { label?: string; items: { href: string; label: string; icon: typeof House }[] }[] = [
+  {
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: House },
+      { href: "/inbox", label: "Inbox", icon: Comment },
+      { href: "/forms", label: "Forms", icon: SquareListUl },
+      { href: "/leads", label: "Leads", icon: Person },
+      { href: "/templates", label: "WhatsApp Templates", icon: FileText },
+      { href: "/agents", label: "AI Agent", icon: Comments },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      { href: "/calendar", label: "Calendar", icon: Calendar },
+      { href: "/trips", label: "Trips", icon: Suitcase },
+      { href: "/villages", label: "Villages", icon: MapPin },
+      { href: "/partners", label: "Partners", icon: Briefcase },
+      { href: "/messaging", label: "Visit messages", icon: Bell },
+    ],
+  },
+  {
+    items: [{ href: "/team", label: "Team", icon: Persons }],
+  },
 ];
 
 export function AdminShell({ email, children }: { email: string; children: React.ReactNode }) {
@@ -59,26 +80,38 @@ export function AdminShell({ email, children }: { email: string; children: React
         </div>
 
         <nav className="mb-2 flex flex-1 flex-col gap-1 text-sm">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const isActive = pathname === href || pathname.startsWith(`${href}/`);
-            return (
-              <Link
-                key={href}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
-                  collapsed ? "justify-center" : ""
-                } ${
-                  isActive
-                    ? "bg-white font-medium text-neutral-900 shadow-sm"
-                    : "text-neutral-600 hover:bg-neutral-200/70 hover:text-neutral-900"
-                }`}
-                href={href}
-                title={collapsed ? label : undefined}
-              >
-                <Icon className="size-[1.3rem] shrink-0" />
-                {!collapsed && <span>{label}</span>}
-              </Link>
-            );
-          })}
+          {NAV_GROUPS.map((group, index) => (
+            <div key={group.label ?? index} className="flex flex-col gap-1">
+              {group.label &&
+                (collapsed ? (
+                  <Separator className="my-1" />
+                ) : (
+                  <p className="px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
+                    {group.label}
+                  </p>
+                ))}
+              {group.items.map(({ href, label, icon: Icon }) => {
+                const isActive = pathname === href || pathname.startsWith(`${href}/`);
+                return (
+                  <Link
+                    key={href}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
+                      collapsed ? "justify-center" : ""
+                    } ${
+                      isActive
+                        ? "bg-white font-medium text-neutral-900 shadow-sm"
+                        : "text-neutral-600 hover:bg-neutral-200/70 hover:text-neutral-900"
+                    }`}
+                    href={href}
+                    title={collapsed ? label : undefined}
+                  >
+                    <Icon className="size-[1.3rem] shrink-0" />
+                    {!collapsed && <span>{label}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         <Dropdown>

@@ -76,6 +76,65 @@ export type Database = {
         }
         Relationships: []
       }
+      experiences: {
+        Row: {
+          capacity: number | null
+          category: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          duration_min: number | null
+          featured: boolean
+          id: string
+          is_active: boolean
+          itinerary: Json
+          name: string
+          seasonal: string | null
+          updated_at: string
+          village_id: string
+        }
+        Insert: {
+          capacity?: number | null
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          duration_min?: number | null
+          featured?: boolean
+          id?: string
+          is_active?: boolean
+          itinerary?: Json
+          name: string
+          seasonal?: string | null
+          updated_at?: string
+          village_id: string
+        }
+        Update: {
+          capacity?: number | null
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          duration_min?: number | null
+          featured?: boolean
+          id?: string
+          is_active?: boolean
+          itinerary?: Json
+          name?: string
+          seasonal?: string | null
+          updated_at?: string
+          village_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "experiences_village_id_fkey"
+            columns: ["village_id"]
+            isOneToOne: false
+            referencedRelation: "villages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       form_answers: {
         Row: {
           created_at: string
@@ -244,30 +303,39 @@ export type Database = {
           created_at: string
           form_id: string
           id: string
+          is_guest_feedback: boolean
           metadata: Json
           status: Database["public"]["Enums"]["submission_status"]
           submitter_token: string
           updated_at: string
+          visit_guest_id: string | null
+          visit_id: string | null
         }
         Insert: {
           completed_at?: string | null
           created_at?: string
           form_id: string
           id?: string
+          is_guest_feedback?: boolean
           metadata?: Json
           status?: Database["public"]["Enums"]["submission_status"]
           submitter_token: string
           updated_at?: string
+          visit_guest_id?: string | null
+          visit_id?: string | null
         }
         Update: {
           completed_at?: string | null
           created_at?: string
           form_id?: string
           id?: string
+          is_guest_feedback?: boolean
           metadata?: Json
           status?: Database["public"]["Enums"]["submission_status"]
           submitter_token?: string
           updated_at?: string
+          visit_guest_id?: string | null
+          visit_id?: string | null
         }
         Relationships: [
           {
@@ -275,6 +343,20 @@ export type Database = {
             columns: ["form_id"]
             isOneToOne: false
             referencedRelation: "forms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_submissions_visit_guest_id_fkey"
+            columns: ["visit_guest_id"]
+            isOneToOne: false
+            referencedRelation: "visit_guests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_submissions_visit_id_fkey"
+            columns: ["visit_id"]
+            isOneToOne: false
+            referencedRelation: "visits"
             referencedColumns: ["id"]
           },
         ]
@@ -525,6 +607,7 @@ export type Database = {
           phone_normalized: string | null
           source: string
           updated_at: string
+          whatsapp_opt_out: boolean
         }
         Insert: {
           attributes?: Json
@@ -535,6 +618,7 @@ export type Database = {
           phone_normalized?: string | null
           source?: string
           updated_at?: string
+          whatsapp_opt_out?: boolean
         }
         Update: {
           attributes?: Json
@@ -545,8 +629,210 @@ export type Database = {
           phone_normalized?: string | null
           source?: string
           updated_at?: string
+          whatsapp_opt_out?: boolean
         }
         Relationships: []
+      }
+      message_rule_set_items: {
+        Row: {
+          anchor: string
+          created_at: string
+          enabled: boolean
+          id: string
+          name: string
+          offset_minutes: number
+          rule_set_id: string
+          template_language: string
+          template_name: string
+          updated_at: string
+        }
+        Insert: {
+          anchor: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          name: string
+          offset_minutes?: number
+          rule_set_id: string
+          template_language?: string
+          template_name: string
+          updated_at?: string
+        }
+        Update: {
+          anchor?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          name?: string
+          offset_minutes?: number
+          rule_set_id?: string
+          template_language?: string
+          template_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_rule_set_items_rule_set_id_fkey"
+            columns: ["rule_set_id"]
+            isOneToOne: false
+            referencedRelation: "message_rule_sets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_rule_sets: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+          visit_type: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+          visit_type?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+          visit_type?: string | null
+        }
+        Relationships: []
+      }
+      partners: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          partner_type: string | null
+          sector: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          partner_type?: string | null
+          sector: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          partner_type?: string | null
+          sector?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      scheduled_whatsapp_sends: {
+        Row: {
+          attempts: number
+          claimed_at: string | null
+          created_at: string
+          error_class: string | null
+          expires_at: string | null
+          id: string
+          last_error: string | null
+          params_sent: Json | null
+          platform_message_id: string | null
+          rule_id: string
+          run_at: string
+          send_started_at: string | null
+          sent_at: string | null
+          status: string
+          updated_at: string
+          visit_guest_id: string
+          visit_id: string
+          zernio_conversation_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          claimed_at?: string | null
+          created_at?: string
+          error_class?: string | null
+          expires_at?: string | null
+          id?: string
+          last_error?: string | null
+          params_sent?: Json | null
+          platform_message_id?: string | null
+          rule_id: string
+          run_at: string
+          send_started_at?: string | null
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          visit_guest_id: string
+          visit_id: string
+          zernio_conversation_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          claimed_at?: string | null
+          created_at?: string
+          error_class?: string | null
+          expires_at?: string | null
+          id?: string
+          last_error?: string | null
+          params_sent?: Json | null
+          platform_message_id?: string | null
+          rule_id?: string
+          run_at?: string
+          send_started_at?: string | null
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          visit_guest_id?: string
+          visit_id?: string
+          zernio_conversation_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_whatsapp_sends_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "visit_message_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_whatsapp_sends_visit_guest_id_fkey"
+            columns: ["visit_guest_id"]
+            isOneToOne: false
+            referencedRelation: "visit_guests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_whatsapp_sends_visit_id_fkey"
+            columns: ["visit_id"]
+            isOneToOne: false
+            referencedRelation: "visits"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       team_members: {
         Row: {
@@ -571,6 +857,372 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      villages: {
+        Row: {
+          active_since: string | null
+          artisan_families_engaged: number | null
+          craft_type: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          partner_type: string | null
+          region: string | null
+          total_households: number | null
+          updated_at: string
+          women_participants: number | null
+        }
+        Insert: {
+          active_since?: string | null
+          artisan_families_engaged?: number | null
+          craft_type?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          partner_type?: string | null
+          region?: string | null
+          total_households?: number | null
+          updated_at?: string
+          women_participants?: number | null
+        }
+        Update: {
+          active_since?: string | null
+          artisan_families_engaged?: number | null
+          craft_type?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          partner_type?: string | null
+          region?: string | null
+          total_households?: number | null
+          updated_at?: string
+          women_participants?: number | null
+        }
+        Relationships: []
+      }
+      visit_experiences: {
+        Row: {
+          created_at: string
+          experience_id: string
+          visit_id: string
+        }
+        Insert: {
+          created_at?: string
+          experience_id: string
+          visit_id: string
+        }
+        Update: {
+          created_at?: string
+          experience_id?: string
+          visit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visit_experiences_experience_id_fkey"
+            columns: ["experience_id"]
+            isOneToOne: false
+            referencedRelation: "experiences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "visit_experiences_visit_id_fkey"
+            columns: ["visit_id"]
+            isOneToOne: false
+            referencedRelation: "visits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      visit_guests: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          feedback_token: string
+          id: string
+          lead_id: string
+          status: string
+          updated_at: string
+          visit_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          feedback_token?: string
+          id?: string
+          lead_id: string
+          status?: string
+          updated_at?: string
+          visit_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          feedback_token?: string
+          id?: string
+          lead_id?: string
+          status?: string
+          updated_at?: string
+          visit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visit_guests_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "visit_guests_visit_id_fkey"
+            columns: ["visit_id"]
+            isOneToOne: false
+            referencedRelation: "visits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      visit_message_rules: {
+        Row: {
+          anchor: string
+          created_at: string
+          enabled: boolean
+          id: string
+          name: string
+          offset_minutes: number
+          source_item_id: string | null
+          template_language: string
+          template_name: string
+          updated_at: string
+          visit_id: string
+        }
+        Insert: {
+          anchor: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          name: string
+          offset_minutes?: number
+          source_item_id?: string | null
+          template_language?: string
+          template_name: string
+          updated_at?: string
+          visit_id: string
+        }
+        Update: {
+          anchor?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          name?: string
+          offset_minutes?: number
+          source_item_id?: string | null
+          template_language?: string
+          template_name?: string
+          updated_at?: string
+          visit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visit_message_rules_source_item_id_fkey"
+            columns: ["source_item_id"]
+            isOneToOne: false
+            referencedRelation: "message_rule_set_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "visit_message_rules_visit_id_fkey"
+            columns: ["visit_id"]
+            isOneToOne: false
+            referencedRelation: "visits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      visit_settings: {
+        Row: {
+          auto_complete_after_hours: number
+          dry_run: boolean
+          expiry_days: number
+          id: boolean
+          quiet_end: string
+          quiet_start: string
+          sends_enabled: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          auto_complete_after_hours?: number
+          dry_run?: boolean
+          expiry_days?: number
+          id?: boolean
+          quiet_end?: string
+          quiet_start?: string
+          sends_enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          auto_complete_after_hours?: number
+          dry_run?: boolean
+          expiry_days?: number
+          id?: boolean
+          quiet_end?: string
+          quiet_start?: string
+          sends_enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      visit_villages: {
+        Row: {
+          created_at: string
+          village_id: string
+          visit_id: string
+        }
+        Insert: {
+          created_at?: string
+          village_id: string
+          visit_id: string
+        }
+        Update: {
+          created_at?: string
+          village_id?: string
+          visit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visit_villages_village_id_fkey"
+            columns: ["village_id"]
+            isOneToOne: false
+            referencedRelation: "villages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "visit_villages_visit_id_fkey"
+            columns: ["visit_id"]
+            isOneToOne: false
+            referencedRelation: "visits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      visits: {
+        Row: {
+          amount_charged: number | null
+          amount_to_artisans: number | null
+          booking_channel: string | null
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          created_by: string | null
+          end_at: string | null
+          end_time: string | null
+          facilitator: string | null
+          feedback_form_id: string | null
+          headcount: number | null
+          id: string
+          notes: string | null
+          origin_place: string | null
+          partner_id: string | null
+          poc_name: string | null
+          poc_phone: string | null
+          program_category: string
+          source: string | null
+          start_at: string | null
+          start_time: string | null
+          status: string
+          updated_at: string
+          visit_date: string | null
+          visit_type: string
+          visitor_category: string | null
+          visitor_group: string | null
+        }
+        Insert: {
+          amount_charged?: number | null
+          amount_to_artisans?: number | null
+          booking_channel?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          end_at?: string | null
+          end_time?: string | null
+          facilitator?: string | null
+          feedback_form_id?: string | null
+          headcount?: number | null
+          id?: string
+          notes?: string | null
+          origin_place?: string | null
+          partner_id?: string | null
+          poc_name?: string | null
+          poc_phone?: string | null
+          program_category?: string
+          source?: string | null
+          start_at?: string | null
+          start_time?: string | null
+          status?: string
+          updated_at?: string
+          visit_date?: string | null
+          visit_type?: string
+          visitor_category?: string | null
+          visitor_group?: string | null
+        }
+        Update: {
+          amount_charged?: number | null
+          amount_to_artisans?: number | null
+          booking_channel?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          end_at?: string | null
+          end_time?: string | null
+          facilitator?: string | null
+          feedback_form_id?: string | null
+          headcount?: number | null
+          id?: string
+          notes?: string | null
+          origin_place?: string | null
+          partner_id?: string | null
+          poc_name?: string | null
+          poc_phone?: string | null
+          program_category?: string
+          source?: string | null
+          start_at?: string | null
+          start_time?: string | null
+          status?: string
+          updated_at?: string
+          visit_date?: string | null
+          visit_type?: string
+          visitor_category?: string | null
+          visitor_group?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visits_feedback_form_id_fkey"
+            columns: ["feedback_form_id"]
+            isOneToOne: false
+            referencedRelation: "forms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "visits_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whatsapp_conversations: {
         Row: {
@@ -780,7 +1432,56 @@ export type Database = {
         Args: { p_attributes: Json; p_name: string; p_phone: string }
         Returns: Json
       }
+      agent_visit_itinerary_for_phone: {
+        Args: { p_phone: string; p_visit_id: string }
+        Returns: Json
+      }
+      agent_visits_for_phone: {
+        Args: { p_limit?: number; p_phone: string; p_scope?: string }
+        Returns: {
+          end_time: string | null
+          experience_names: string[]
+          facilitator: string | null
+          guest_status: string
+          poc_name: string | null
+          poc_phone: string | null
+          start_time: string | null
+          status: string
+          village_names: string[]
+          visit_date: string | null
+          visit_id: string
+          visit_type: string
+        }[]
+      }
       answer_to_text: { Args: { p_value: Json }; Returns: string }
+      auto_complete_visits: { Args: never; Returns: number }
+      claim_scheduled_sends: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          claimed_at: string | null
+          created_at: string
+          error_class: string | null
+          expires_at: string | null
+          id: string
+          last_error: string | null
+          params_sent: Json | null
+          platform_message_id: string | null
+          rule_id: string
+          run_at: string
+          send_started_at: string | null
+          sent_at: string | null
+          status: string
+          updated_at: string
+          visit_guest_id: string
+          visit_id: string
+          zernio_conversation_id: string | null
+        }[]
+      }
+      dashboard_feedback_stats: { Args: { p_from: string; p_to: string }; Returns: Json }
+      dashboard_stats: { Args: { p_from: string; p_to: string }; Returns: Json }
+      feedback_save: { Args: { p_answers: Json; p_complete?: boolean; p_token: string }; Returns: Json }
+      feedback_session: { Args: { p_token: string }; Returns: Json }
       hook_restrict_signup_to_active_team_members: {
         Args: { event: Json }
         Returns: Json

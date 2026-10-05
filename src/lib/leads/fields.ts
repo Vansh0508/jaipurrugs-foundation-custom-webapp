@@ -5,10 +5,32 @@ export type Lead = Tables<"leads">;
 export type LeadList = Tables<"lead_lists">;
 
 /**
- * A reference to one value on a lead, as stored in template bindings:
- * "name", "phone", or "attr:<lead_attributes.key>".
+ * Values that come from the VISIT a message is about (not from the lead). They only
+ * resolve in messages sent by the visit scheduler, which knows the visit; the agent and
+ * the inbox composer have no visit in hand, so a template that uses one is "scheduled only".
  */
-export type LeadFieldRef = "name" | "phone" | `attr:${string}`;
+export const VISIT_FIELDS = [
+  { id: "visit_type", label: "Visit type" },
+  { id: "visit_date", label: "Visit date" },
+  { id: "start_time", label: "Start time" },
+  { id: "end_time", label: "End time" },
+  { id: "poc_name", label: "Coordinator name" },
+  { id: "village_names", label: "Villages" },
+  { id: "experience_names", label: "Experiences" },
+  { id: "feedback_token", label: "Feedback link token (for a URL button)" },
+] as const;
+
+export type VisitFieldId = (typeof VISIT_FIELDS)[number]["id"];
+
+/**
+ * A reference to one value, as stored in template bindings:
+ * "name", "phone", "attr:<lead_attributes.key>", or "visit:<VisitFieldId>".
+ */
+export type LeadFieldRef = "name" | "phone" | `attr:${string}` | `visit:${VisitFieldId}`;
+
+export function isVisitFieldRef(value: string): value is `visit:${VisitFieldId}` {
+  return value.startsWith("visit:") && VISIT_FIELDS.some((f) => f.id === value.slice(6));
+}
 
 export const ATTRIBUTE_KEY_PATTERN = /^[a-z][a-z0-9_]{0,39}$/;
 export const RESERVED_ATTRIBUTE_KEYS = ["name", "phone"];
@@ -22,6 +44,7 @@ export const LEAD_ATTRIBUTE_TYPES = [
 
 export function isLeadFieldRef(value: string): value is LeadFieldRef {
   if (value === "name" || value === "phone") return true;
+  if (isVisitFieldRef(value)) return true;
   return value.startsWith("attr:") && ATTRIBUTE_KEY_PATTERN.test(value.slice(5));
 }
 
@@ -44,6 +67,7 @@ export function slugifyAttributeKey(label: string): string {
 export function leadFieldLabel(ref: LeadFieldRef, attributes: Pick<LeadAttribute, "key" | "label">[]): string {
   if (ref === "name") return "Name";
   if (ref === "phone") return "Phone";
+  if (isVisitFieldRef(ref)) return `Visit: ${VISIT_FIELDS.find((f) => f.id === ref.slice(6))?.label ?? ref}`;
   const key = attributeKeyOf(ref);
   return attributes.find((a) => a.key === key)?.label ?? key ?? ref;
 }
@@ -56,6 +80,7 @@ export function leadFieldOptions(attributes: Pick<LeadAttribute, "key" | "label"
     ...attributes
       .filter((a) => a.is_active)
       .map((a) => ({ ref: `attr:${a.key}` as LeadFieldRef, label: a.label })),
+    ...VISIT_FIELDS.map((f) => ({ ref: `visit:${f.id}` as LeadFieldRef, label: `Visit: ${f.label} (scheduled messages only)` })),
   ];
 }
 
@@ -75,6 +100,7 @@ export function readLeadField(
   activeKeys: Set<string>,
 ): string | null {
   if (!lead) return null;
+  if (isVisitFieldRef(ref)) return null; // not on the lead; see readVisitField
   if (ref === "name") return lead.name?.trim() || null;
   if (ref === "phone") return lead.phone?.trim() || null;
   const key = attributeKeyOf(ref);

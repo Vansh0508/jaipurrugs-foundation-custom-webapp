@@ -13,6 +13,7 @@ import {
 export * from "./types";
 
 const ZERNIO_BASE_URL = "https://zernio.com/api/v1";
+const TEMPLATE_SEND_TIMEOUT_MS = 20_000;
 
 export function getZernioConfig(profileIdOverride?: string): ZernioConfig {
   const apiKey = process.env.ZERNIO_API_KEY?.trim();
@@ -420,6 +421,11 @@ export async function sendWhatsAppTemplate(params: {
   templateName: string;
   templateLanguage: string;
   templateParams: string[];
+  /**
+   * Sent as an Idempotency-Key header so a retried send can be collapsed by Zernio. Whether this
+   * endpoint honours it is unverified — callers must not rely on it for exactly-once delivery.
+   */
+  idempotencyKey?: string;
 }): Promise<SendTemplateResult> {
   const config = getZernioConfig();
 
@@ -433,7 +439,10 @@ export async function sendWhatsAppTemplate(params: {
       headers: {
         Authorization: `Bearer ${config.apiKey}`,
         "Content-Type": "application/json",
+        ...(params.idempotencyKey ? { "Idempotency-Key": params.idempotencyKey } : {}),
       },
+      // Without a timeout a hung request would keep a scheduler batch waiting forever.
+      signal: AbortSignal.timeout(TEMPLATE_SEND_TIMEOUT_MS),
       body: JSON.stringify({
         accountId: params.accountId,
         participantId: params.participantId,
@@ -444,7 +453,7 @@ export async function sendWhatsAppTemplate(params: {
     });
 
     if (!response.ok) {
-      return { success: false, error: await readZernioError(response) };
+      return { success: false, error: await readZernioError(response), status: response.status };
     }
 
     const data = await response.json();
@@ -455,8 +464,11 @@ export async function sendWhatsAppTemplate(params: {
       messageId: payload.messageId ? String(payload.messageId) : undefined,
     };
   } catch (err) {
+    // No HTTP status: a timeout, dropped connection or unreadable reply. The request may well have
+    // reached WhatsApp, so the outcome is genuinely unknown.
     return {
       success: false,
+      ambiguous: true,
       error: err instanceof Error ? err.message : "Failed to send WhatsApp template",
     };
   }

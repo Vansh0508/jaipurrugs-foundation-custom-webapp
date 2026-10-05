@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Pencil, Plus, TrashBin } from "@gravity-ui/icons";
 import { Button, Chip, Input, Label, TextArea, TextField, toast } from "@heroui/react";
@@ -8,6 +9,8 @@ import { addLeadMemory, deleteLeadMemory, updateLeadMemory, type InboxThread, ty
 import { updateLeadDetails } from "@/lib/actions/leads";
 import { leadAttributeValues } from "@/lib/leads/fields";
 import { formatPhone } from "@/lib/mastra/phone";
+import { visitStatusLabel } from "@/lib/visits/constants";
+import { formatDate } from "@/lib/visits/time";
 import { AttributeInput } from "../leads/lead-edit-modal";
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -80,7 +83,7 @@ function MemoryItem({ memory }: { memory: LeadMemory }) {
 
 export function ContactProfile({ thread }: { thread: InboxThread }) {
   const router = useRouter();
-  const { conversation, lead, leadLists, memories, attributes } = thread;
+  const { conversation, lead, leadLists, memories, attributes, visits } = thread;
   const active = attributes.filter((a) => a.is_active);
   const stored = lead ? leadAttributeValues(lead) : {};
 
@@ -139,6 +142,28 @@ export function ContactProfile({ thread }: { thread: InboxThread }) {
           </div>
         ) : null}
       </section>
+
+      {visits.length > 0 ? (
+        <section className="flex flex-col gap-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Visits</h3>
+          <ul className="flex flex-col gap-1.5">
+            {visits.map((visit) => (
+              <li key={visit.id}>
+                <Link
+                  className="flex flex-col rounded-lg border border-border/60 p-2 text-sm hover:bg-neutral-50"
+                  href={visit.visitDate ? `/calendar?month=${visit.visitDate.slice(0, 7)}` : "/trips"}
+                >
+                  <span className="font-medium">{visit.visitType}</span>
+                  <span className="text-xs text-muted">
+                    {formatDate(visit.visitDate)} · {visitStatusLabel(visit.status)}
+                    {visit.guestStatus === "no_show" ? " · no-show" : ""}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="flex flex-col gap-3">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Details</h3>
