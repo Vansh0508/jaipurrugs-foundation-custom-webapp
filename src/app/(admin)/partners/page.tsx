@@ -1,4 +1,6 @@
 import { PartnersManager } from "@/components/admin/partners/partners-manager";
+import { PartnersTabs } from "@/components/admin/partners/partners-tabs";
+import { ReviewsPanel } from "@/components/admin/partners/reviews-panel";
 import { requireActiveTeamMember } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
@@ -7,7 +9,15 @@ export const dynamic = "force-dynamic";
 export default async function PartnersPage() {
   await requireActiveTeamMember();
   const supabase = await createClient();
-  const { data: partners } = await supabase.from("partners").select("*").order("name");
+  const [{ data: partners }, { data: reviews }] = await Promise.all([
+    supabase.from("partners").select("*").order("name"),
+    supabase
+      .from("reviews")
+      .select("*")
+      .order("reviewed_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(500),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -18,7 +28,10 @@ export default async function PartnersPage() {
           sectors are engaged.
         </p>
       </div>
-      <PartnersManager partners={partners ?? []} />
+      <PartnersTabs
+        partners={<PartnersManager partners={partners ?? []} />}
+        reviews={<ReviewsPanel reviews={reviews ?? []} />}
+      />
     </div>
   );
 }

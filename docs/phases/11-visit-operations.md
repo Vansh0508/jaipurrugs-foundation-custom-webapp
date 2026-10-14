@@ -16,6 +16,7 @@ Builds on [phase 8](08-ai-agent.md), [phase 9](09-leads-templates.md) and [phase
 | M5 | Per-guest feedback link (`/fb/[token]`), anon policy tightening for guest-linked submissions, satisfaction score | Done (see "not yet exercised" below) |
 | M6 | Rule sets, scheduled-send queue, dispatch route, `visit:` template bindings, `/messaging` | Done (live sending not yet exercised) |
 | M7 | pg_cron + pg_net wiring, auto-complete job, monitoring | Done (needs the manual steps below) |
+| M8 | Public reviews: `reviews` table, Firecrawl fetch + review-organizer agent, Reviews tab on `/partners` | Done (live Firecrawl fetch not yet exercised — needs `FIRECRAWL_API_KEY`) |
 
 ## Agent access (M3)
 
@@ -69,6 +70,15 @@ To turn it on (all manual, one-off):
 6. Switch dry run off. Going live re-queues unexpired dry-run rows.
 
 Monitoring: `select * from cron.job_run_details order by start_time desc limit 20;` and `select * from net._http_response order by created desc limit 20;`. The route logs one `[cron/dispatch] {...}` summary line per tick. The kill switch (`sends_enabled`) stops all sending within one tick.
+
+## Reviews (M8)
+
+- `public.reviews` holds reviews pulled from booking platforms. `source` (`airbnb` | `tripadvisor`) drives the tag on each card and the filter on the Reviews tab of `/partners`. The reviewer's avatar is optional; the card shows initials when it is missing.
+- The Sync button calls `syncReviewsFromSource` (`src/lib/actions/reviews.ts`) → `syncReviews` (`src/lib/reviews/sync.ts`): Firecrawl `POST /v2/scrape` of the URL in `src/lib/reviews/sources.ts` (scrolls the reviews modal, `maxAge: 0` so it is never a cached copy) → the `jrf-review-organizer` Mastra agent turns the page markdown into structured reviews → new ones are inserted.
+- **"Only new" is enforced in code (`storeNewReviews`), not trusted to the model.** A review is skipped when its dedupe key already exists or it is dated before the most recent stored review; if that review is found again nothing is added. The agent is also told the latest stored review so it can stop early, but it doesn't always — the code check is the guarantee.
+- The dedupe key is reviewer + the start of the text, **not the date**: Airbnb shows relative dates ("2 weeks ago") that drift between syncs. `reviewed_at` is therefore approximate (1st of the month for month-only dates), and the UI shows month + year only.
+- Writes use the signed-in user's Supabase client, so RLS (`is_active_team_member()`) stays the boundary — no service-role key.
+- Adding TripAdvisor later is a URL in `REVIEW_SYNC_URLS`; the table, tag and filter already support it.
 
 ## Data model rules
 

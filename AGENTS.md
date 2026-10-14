@@ -29,6 +29,7 @@ The app has exactly two surfaces:
 - Node.js backend via Next.js **Server Actions** (default mutation path) and route handlers (only for things Server Actions can't do, e.g. webhooks)
 - **Self-hosted** deployment on the foundation's own server (Docker/PM2 + Nginx + Let's Encrypt), as a subdomain of `jaipurrugs.org` — not Vercel
 - Schema managed via Supabase MCP connector + SQL files committed under `supabase/migrations/`
+- **Firecrawl** (REST `/v2/scrape`, `FIRECRAWL_API_KEY`) for fetching public review pages — server-only, never from a Client Component
 - **Mastra (`@mastra/core`)** for the WhatsApp AI agent (OpenAI via Mastra's model router, `OPENAI_API_KEY`), with **Zernio** as the WhatsApp API — see [docs/phases/08-ai-agent.md](docs/phases/08-ai-agent.md)
 
 ## 3. Folder Structure
@@ -48,13 +49,14 @@ src/
     supabase/{server,client,admin,proxy}.ts  # 4 factories; admin.ts is server-only, service-role;
                                               # proxy.ts holds the updateSession() helper proxy.ts calls
     auth/session.ts                          # getCurrentUser() / requireActiveTeamMember() server helpers
-    actions/{forms,submissions,team,auth,zernio,agent,kb,leads,templates,inbox,villages,partners,visits,messaging,feedback}.ts # server actions, grouped by domain
+    actions/{forms,submissions,team,auth,zernio,agent,kb,leads,templates,inbox,villages,partners,visits,messaging,feedback,reviews}.ts # server actions, grouped by domain
     inbox/{ingest,agent-reply}.ts            # webhook ingestion + automatic agent replies (server-only)
     forms/field-types.ts                     # single source of truth: field-type registry
     mastra/                                  # AI agent + context-bound tools (phone-scoped; see phase 8)
     leads/fields.ts                          # lead field refs (name | phone | attr:<key>) shared by UI + agent
     whatsapp/                                # template summaries, builder rules, variable bindings (phase 9)
     zernio/                                  # Zernio WhatsApp API client (server-only)
+    reviews/                                 # Airbnb review sync: Firecrawl fetch, organizer agent, dedupe, store (server-only; phase 11)
     visits/                                  # visit-operations schemas, constants, IST time helpers, queries (phase 11)
     scheduler/                               # scheduled WhatsApp sends: dispatcher + inbox mirror (server-only, service-role; phase 11)
   proxy.ts                                   # (admin)-only session + whitelist gate (Next.js 16: renamed from middleware.ts)

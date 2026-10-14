@@ -749,6 +749,48 @@ export type Database = {
         }
         Relationships: []
       }
+      reviews: {
+        Row: {
+          created_at: string
+          dedupe_key: string
+          fetched_at: string
+          id: string
+          rating: number | null
+          review_text: string
+          reviewed_at: string | null
+          reviewer_avatar_url: string | null
+          reviewer_name: string
+          source: string
+          source_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          dedupe_key: string
+          fetched_at?: string
+          id?: string
+          rating?: number | null
+          review_text: string
+          reviewed_at?: string | null
+          reviewer_avatar_url?: string | null
+          reviewer_name: string
+          source: string
+          source_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          dedupe_key?: string
+          fetched_at?: string
+          id?: string
+          rating?: number | null
+          review_text?: string
+          reviewed_at?: string | null
+          reviewer_avatar_url?: string | null
+          reviewer_name?: string
+          source?: string
+          source_url?: string | null
+        }
+        Relationships: []
+      }
       scheduled_whatsapp_sends: {
         Row: {
           attempts: number
