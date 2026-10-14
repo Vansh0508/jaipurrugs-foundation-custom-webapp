@@ -8,7 +8,7 @@ import { isReviewSource } from "@/lib/reviews/sources";
 import { syncReviews } from "@/lib/reviews/sync";
 import { createClient } from "@/lib/supabase/server";
 
-export type SyncReviewsResult = { error?: string; found?: number; inserted?: number };
+export type SyncReviewsResult = { error?: string; found?: number; inserted?: number; warning?: string };
 
 export async function syncReviewsFromSource(source: string): Promise<SyncReviewsResult> {
   await requireActiveTeamMember();
@@ -19,8 +19,9 @@ export async function syncReviewsFromSource(source: string): Promise<SyncReviews
   // The user's own client, not service-role: RLS (active team members only) stays the boundary.
   const supabase = await createClient();
   const result = await syncReviews(source, supabase);
+  // A failure part-way through (e.g. the second listing) may still have saved reviews from the first.
+  if (result.ok || result.inserted) revalidatePath("/partners");
   if (!result.ok) return { error: result.error };
 
-  revalidatePath("/partners");
-  return { found: result.found, inserted: result.inserted };
+  return { found: result.found, inserted: result.inserted, warning: result.warning };
 }

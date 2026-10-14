@@ -27,10 +27,10 @@ const INSTRUCTIONS = `You organize guest reviews scraped from a booking platform
 
 You receive the page as markdown. Find every individual guest review and return it in the requested structure:
 - reviewerName: the guest's display name, exactly as shown.
-- avatarUrl: the reviewer's profile photo URL only if the markdown contains an image for that specific reviewer (an https URL). Never invent or reuse a URL; null when there is none. Ignore logos, icons and photos of the experience itself.
-- rating: whole stars 1-5 if shown for that review, otherwise null.
+- avatarUrl: the reviewer's profile photo URL only if the markdown contains an image for that specific reviewer (an https URL). Never invent or reuse a URL; null when there is none. Ignore logos, icons, photos of the experience itself, and generic placeholder silhouettes (URLs containing "default-avatar").
+- rating: whole stars (or "bubbles", e.g. "5 of 5 bubbles") 1-5 if shown for that review, otherwise null.
 - text: the review text as written, without the reviewer's name, date or "Show more" / "Translated" UI labels.
-- reviewedAt: convert the date shown into YYYY-MM-DD using today's date. A month and year only ("October 2026") becomes the 1st of that month. A relative date ("2 weeks ago", "yesterday") is counted back from today. null when no date is shown.
+- reviewedAt: convert the date shown into YYYY-MM-DD using today's date. Prefer an exact date when the page gives one (e.g. "Written 7 October 2026"). A month and year only ("October 2026") becomes the 1st of that month. A relative date ("2 weeks ago", "yesterday") is counted back from today. null when no date is shown.
 - Return reviews newest first. The page often shows the same review twice (a short preview list and the full list): return each review once.
 
 Never include host responses, the experience's description, ratings summaries, or "similar experiences" content. Do not summarise, translate or edit the review text.

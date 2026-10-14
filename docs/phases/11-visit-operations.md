@@ -78,7 +78,10 @@ Monitoring: `select * from cron.job_run_details order by start_time desc limit 2
 - **"Only new" is enforced in code (`storeNewReviews`), not trusted to the model.** A review is skipped when its dedupe key already exists or it is dated before the most recent stored review; if that review is found again nothing is added. The agent is also told the latest stored review so it can stop early, but it doesn't always — the code check is the guarantee.
 - The dedupe key is reviewer + the start of the text, **not the date**: Airbnb shows relative dates ("2 weeks ago") that drift between syncs. `reviewed_at` is therefore approximate (1st of the month for month-only dates), and the UI shows month + year only.
 - Writes use the signed-in user's Supabase client, so RLS (`is_active_team_member()`) stays the boundary — no service-role key.
-- Adding TripAdvisor later is a URL in `REVIEW_SYNC_URLS`; the table, tag and filter already support it.
+- Targets: Airbnb is one page whose reviews modal is scrolled to load them all (`scrollModal`). TripAdvisor is two listings (Jaipur Rugs Village Tour, Jaipur Rugs), each paginated 10 per page via the `-Reviews-or10-` URL form; `expandReadMore` clicks the "Read more" buttons first, and `reviewsHeading` trims the markdown to the `## Reviews` list (without that the agent reads the highlights block, which repeats on every page, instead of the page's reviews). Adding a source or listing is a target entry.
+- "Latest stored review" is per listing (`source_url`), so a newer review on one listing never hides an older unsaved one on another.
+- Paginated listings self-heal: if we hold < 95% of the total the site reports ("Showing results 1-10 of 123"), the sync backfills every page using the dedupe key alone (no date cutoff, no early stop). Otherwise it fetches page 1 and stops at the first page with nothing new, so a routine sync costs one scrape per listing.
+- TripAdvisor's generic `default-avatar` pictures are dropped (initials look better). A first full TripAdvisor sync takes a few minutes (13 pages); routine syncs ~40 s.
 
 ## Data model rules
 

@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { ArrowRotateRight } from "@gravity-ui/icons";
-import { Avatar, Button, Chip, toast } from "@heroui/react";
+import { ArrowRotateRight, ChevronDown } from "@gravity-ui/icons";
+import { Avatar, Button, Chip, Dropdown, Label, toast } from "@heroui/react";
 import { syncReviewsFromSource } from "@/lib/actions/reviews";
 import type { Tables } from "@/lib/types/supabase";
-import { REVIEW_SOURCE_LABELS, REVIEW_SYNC_URLS, isReviewSource, type ReviewSource } from "@/lib/reviews/sources";
+import { REVIEW_SOURCE_LABELS, REVIEW_SYNC_TARGETS, isReviewSource, type ReviewSource } from "@/lib/reviews/sources";
 
 export type ReviewRow = Tables<"reviews">;
 
@@ -80,7 +80,8 @@ function ReviewCard({ review }: { review: ReviewRow }) {
 
 export function ReviewsPanel({ reviews }: { reviews: ReviewRow[] }) {
   const [filter, setFilter] = useState<"all" | ReviewSource>("all");
-  const [isSyncing, startSync] = useTransition();
+  const [syncingSource, setSyncingSource] = useState<ReviewSource | null>(null);
+  const [, startSync] = useTransition();
 
   const counts = useMemo(() => {
     const map = new Map<string, number>();
@@ -90,17 +91,21 @@ export function ReviewsPanel({ reviews }: { reviews: ReviewRow[] }) {
 
   // Offer a filter for every source that has reviews, plus any source we can sync.
   const filterSources = (Object.keys(REVIEW_SOURCE_LABELS) as ReviewSource[]).filter(
-    (s) => counts.has(s) || REVIEW_SYNC_URLS[s],
+    (s) => counts.has(s) || REVIEW_SYNC_TARGETS[s],
   );
+  const syncSources = Object.keys(REVIEW_SYNC_TARGETS) as ReviewSource[];
   const visible = filter === "all" ? reviews : reviews.filter((r) => r.source === filter);
 
   function handleSync(source: ReviewSource) {
+    setSyncingSource(source);
     startSync(async () => {
       const result = await syncReviewsFromSource(source);
+      setSyncingSource(null);
       if (result.error) {
         toast.danger(result.error);
         return;
       }
+      if (result.warning) toast.warning(result.warning);
       const label = REVIEW_SOURCE_LABELS[source];
       toast.success(
         result.inserted
@@ -128,18 +133,31 @@ export function ReviewsPanel({ reviews }: { reviews: ReviewRow[] }) {
             </Button>
           ))}
         </div>
-        {(Object.keys(REVIEW_SYNC_URLS) as ReviewSource[]).map((source) => (
-          <Button key={source} size="sm" isPending={isSyncing} onPress={() => handleSync(source)}>
-            <ArrowRotateRight className="size-4" />
-            Sync {REVIEW_SOURCE_LABELS[source]} reviews
+        <Dropdown>
+          <Button size="sm" isPending={syncingSource !== null}>
+            Merge
+            <ChevronDown className="size-4" />
           </Button>
-        ))}
+          <Dropdown.Popover placement="bottom end">
+            <Dropdown.Menu
+              disabledKeys={syncingSource ? syncSources : []}
+              onAction={(key) => handleSync(String(key) as ReviewSource)}
+            >
+              {syncSources.map((source) => (
+                <Dropdown.Item key={source} id={source} textValue={`Sync ${REVIEW_SOURCE_LABELS[source]} reviews`}>
+                  <ArrowRotateRight className="size-4 shrink-0" />
+                  <Label>Sync {REVIEW_SOURCE_LABELS[source]} reviews</Label>
+                </Dropdown.Item>
+              ))}
+            </Dropdown.Menu>
+          </Dropdown.Popover>
+        </Dropdown>
       </div>
 
       {visible.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted">
           {reviews.length === 0
-            ? "No reviews yet. Use the sync button to fetch them from Airbnb."
+            ? "No reviews yet. Use a sync button to fetch them from Airbnb or TripAdvisor."
             : "No reviews from this source yet."}
         </div>
       ) : (
