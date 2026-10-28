@@ -4,15 +4,13 @@ import { bookingChannelLabel, visitorCategoryLabel } from "@/lib/visits/constant
 import {
   DASHBOARD_RANGES,
   formatInr,
-  formatPct,
-  monthOverMonthPct,
   type DashboardRangeId,
   type DashboardStats,
   type LabelValue,
 } from "@/lib/visits/dashboard";
 import { formatDate } from "@/lib/visits/time";
 import { StatCard } from "../visits/stat-card";
-import { IncomeBarChart, MonthlyAreaChart, PercentRings, RankedBarChart } from "./charts";
+import { IncomeBarChart, MonthlyAreaChart, RankedBarChart } from "./charts";
 
 function Section({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
   return (
@@ -48,9 +46,6 @@ function ChartCard({
   );
 }
 
-const cards = "grid grid-cols-2 gap-4 lg:grid-cols-4";
-
-const SECTOR_SHORT_LABEL: Record<string, string> = { private: "Private", public: "Public", civil_society: "Civil society" };
 
 /** Turns stored ids into display labels on the server, before the data reaches a client chart. */
 function relabel(items: LabelValue[], labelFor: (id: string) => string): LabelValue[] {
@@ -70,10 +65,7 @@ export function DashboardView({
   from: string;
   to: string;
 }) {
-  const { operations, reach, economic, participation, quality, collaboration, innovation } = stats;
-  // The current month is still in progress, so growth compares the last two COMPLETE months.
-  const completeMonths = economic.monthly.filter((m) => m.month < to.slice(0, 7));
-  const growth = monthOverMonthPct(completeMonths.map((m) => m.income));
+  const { operations, reach, economic, innovation } = stats;
   const hasAnyData = reach.visits > 0 || operations.upcoming_visits > 0 || operations.completed_in_range > 0;
 
   return (
@@ -110,29 +102,31 @@ export function DashboardView({
       ) : null}
 
       <Section title="Operations" description="What needs attention now.">
-        <div className={cards}>
+        <div className="grid grid-cols-2 gap-4">
           <StatCard label="Upcoming visits" value={operations.upcoming_visits} hint={`${operations.upcoming_guests} guests`} />
-          <StatCard
-            label="Awaiting completion"
-            value={operations.awaiting_completion}
-            hint={operations.awaiting_completion > 0 ? "ended, not marked complete" : "all caught up"}
-          />
           <StatCard label="Completed" value={operations.completed_in_range} hint="in period" />
-          <StatCard label="Cancelled" value={operations.cancelled_in_range} hint="in period" />
         </div>
       </Section>
 
-      <Section title="Reach">
-        <div className={cards}>
+      <Section title="Reach & economic value">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
           <StatCard label="Visitors" value={reach.visitors} hint={`${reach.visits} visits`} />
-          <StatCard label="Unique guests" value={reach.unique_guests} hint="with a recorded contact" />
-          <StatCard label="Repeat guests" value={reach.repeat_guests} hint={`${reach.first_time_guests} first-time`} />
-          <StatCard label="Repeat rate" value={formatPct(reach.repeat_rate_pct)} />
+          <StatCard label="Total income" value={formatInr(economic.total_income)} />
+          <StatCard
+            label="To artisan families"
+            value={formatInr(economic.income_to_artisans)}
+            hint={economic.pct_to_artisans === null ? undefined : `${economic.pct_to_artisans}% of income`}
+          />
         </div>
-        <div className="grid gap-4 lg:grid-cols-3">
-          <ChartCard className="lg:col-span-3" hint="headcount per month" title="Visitors per month">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <ChartCard hint="charged vs paid to artisan families" title="Income by month">
+            <IncomeBarChart data={economic.monthly} />
+          </ChartCard>
+          <ChartCard hint="headcount per month" title="Visitors per month">
             <MonthlyAreaChart data={reach.monthly} dataKey="visitors" label="Visitors" />
           </ChartCard>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-3">
           <ChartCard hint="completed visits" title="By booking channel">
             <RankedBarChart data={relabel(reach.by_channel, (id) => (id === "partner_agency" ? "Agency" : bookingChannelLabel(id)))} />
           </ChartCard>
@@ -141,77 +135,6 @@ export function DashboardView({
           </ChartCard>
           <ChartCard hint="completed visits" title="By village">
             <RankedBarChart color="var(--chart-4)" data={reach.by_village} />
-          </ChartCard>
-        </div>
-      </Section>
-
-      <Section title="Economic value">
-        <div className={cards}>
-          <StatCard label="Total income" value={formatInr(economic.total_income)} />
-          <StatCard
-            label="To artisan families"
-            value={formatInr(economic.income_to_artisans)}
-            hint={economic.pct_to_artisans === null ? undefined : `${economic.pct_to_artisans}% of income`}
-          />
-          <StatCard label="Income per family" value={formatInr(economic.income_per_family)} hint="to artisans ÷ families" />
-          <StatCard
-            label="Month over month"
-            value={growth === null ? "—" : `${growth > 0 ? "+" : ""}${growth}%`}
-            hint="last 2 complete months"
-          />
-        </div>
-        <ChartCard hint="charged vs paid to artisan families" title="Income by month">
-          <IncomeBarChart data={economic.monthly} />
-        </ChartCard>
-      </Section>
-
-      <Section title="Participation & quality" description="Villages and partners as they are today, plus guest loyalty.">
-        <div className="grid gap-4 lg:grid-cols-3">
-          <div className="grid grid-cols-2 gap-4 lg:col-span-2">
-            <StatCard
-              label="Artisan families"
-              value={participation.families_engaged}
-              hint={`of ${participation.total_households} households · ${participation.active_villages} village${participation.active_villages === 1 ? "" : "s"}`}
-            />
-            <StatCard label="Women participants" value={participation.women_participants} />
-            <StatCard
-              label="Satisfaction"
-              value={quality.avg_rating === null ? "—" : `${quality.avg_rating} / 5`}
-              hint={
-                quality.feedback_count === 0
-                  ? "no guest feedback yet"
-                  : `${quality.feedback_count} response${quality.feedback_count === 1 ? "" : "s"}`
-              }
-            />
-            <StatCard
-              label="Partner retention"
-              value={formatPct(quality.partner_retention_pct)}
-              hint={`${quality.partners_retained} of ${quality.partners_used} partners rebooked`}
-            />
-          </div>
-          <ChartCard hint="% of 100" title="Impact at a glance">
-            <PercentRings
-              rings={[
-                { label: "Household participation", value: participation.pct_households, color: "var(--chart-1)" },
-                { label: "Income to artisans", value: economic.pct_to_artisans, color: "var(--chart-2)" },
-                { label: "Repeat guests", value: quality.repeat_rate_pct, color: "var(--chart-4)" },
-              ]}
-            />
-          </ChartCard>
-        </div>
-      </Section>
-
-      <Section
-        title="Collaboration"
-        description="Which sectors are engaged matters more than the partner count: private, public and civil society."
-      >
-        <div className="grid gap-4 lg:grid-cols-3">
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-1">
-            <StatCard label="Sectors engaged" value={`${collaboration.sectors_engaged} / 3`} hint="private · public · civil society" />
-            <StatCard label="Active partners" value={collaboration.total_partners} />
-          </div>
-          <ChartCard className="lg:col-span-2" title="Partners by sector">
-            <RankedBarChart color="var(--chart-5)" data={relabel(collaboration.by_sector, (id) => SECTOR_SHORT_LABEL[id] ?? id)} />
           </ChartCard>
         </div>
       </Section>

@@ -5,7 +5,7 @@ import { requireActiveTeamMember } from "@/lib/auth/session";
 import { applyRuleSetToVisit } from "@/lib/actions/messaging";
 import { normalizePhone } from "@/lib/mastra/phone";
 import { createClient } from "@/lib/supabase/server";
-import { VISIT_STATUSES, programLabel } from "@/lib/visits/constants";
+import { VISIT_DETAIL_VIEWS, VISIT_STATUSES, programLabel, type VisitDetailView } from "@/lib/visits/constants";
 import { blankToNull, guestSchema, guestStatusSchema, visitSchema, type VisitInput } from "@/lib/visits/schemas";
 import type { LeadSearchResult, VisitGuestItem, VisitListItem } from "@/lib/visits/types";
 
@@ -151,6 +151,7 @@ export async function createVisit(input: VisitInput): Promise<VisitActionResult 
       villageIds: [...new Set(parsed.data.villageIds)],
       experienceIds: (linkedExperiences ?? []).map((r) => r.experience_id),
       guestCount: 0,
+      guests: [],
     },
   };
 }
@@ -193,6 +194,16 @@ export async function setVisitStatus(id: string, status: string): Promise<VisitA
     .eq("id", id);
   if (error) return { error: "Could not update the visit." };
   revalidateVisits();
+  return {};
+}
+
+/** Saves whether this user sees visit details in a sidebar or a pop-up. */
+export async function setVisitDetailView(view: VisitDetailView): Promise<VisitActionResult> {
+  await requireActiveTeamMember();
+  if (!VISIT_DETAIL_VIEWS.includes(view)) return { error: "Unknown view." };
+  const supabase = await createClient();
+  const { error } = await supabase.auth.updateUser({ data: { visit_detail_view: view } });
+  if (error) return { error: "Could not save your view preference." };
   return {};
 }
 

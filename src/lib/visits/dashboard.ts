@@ -119,19 +119,6 @@ export function formatInr(value: number | null | undefined): string {
   return value === null || value === undefined ? "—" : inr.format(value);
 }
 
-export function formatPct(value: number | null | undefined): string {
-  return value === null || value === undefined ? "—" : `${value}%`;
-}
-
-/** Month-over-month change of the last two months in a series, or null when it can't be computed. */
-export function monthOverMonthPct(values: number[]): number | null {
-  if (values.length < 2) return null;
-  const previous = values[values.length - 2];
-  const latest = values[values.length - 1];
-  if (!previous) return null;
-  return Math.round(((latest - previous) / previous) * 1000) / 10;
-}
-
 /** "2026-09" -> a Date at the start of that month (UTC-noon safe for any local timezone). */
 export function monthToDate(month: string): Date {
   const [year, mon] = month.split("-").map(Number);

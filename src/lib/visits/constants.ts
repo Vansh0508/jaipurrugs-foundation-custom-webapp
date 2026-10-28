@@ -55,6 +55,10 @@ export const GUEST_STATUSES = [
 
 export type GuestStatus = (typeof GUEST_STATUSES)[number]["id"];
 
+/** How a visit's details open on Trips; remembered per user in their auth metadata. */
+export const VISIT_DETAIL_VIEWS = ["sidebar", "popup"] as const;
+export type VisitDetailView = (typeof VISIT_DETAIL_VIEWS)[number];
+
 /** Dialling codes offered next to the coordinator's phone number. */
 export const COUNTRY_CODES = [
   { id: "+91", label: "India" },

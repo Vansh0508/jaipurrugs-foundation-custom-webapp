@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/supabase";
-import type { VisitListItem, VisitReference, VisitRow } from "./types";
+import type { VisitGuestSummary, VisitListItem, VisitReference, VisitRow } from "./types";
 
 type Client = SupabaseClient<Database>;
 
@@ -17,14 +17,17 @@ export async function loadVisitReference(supabase: Client): Promise<VisitReferen
   return { villages: villages ?? [], experiences: experiences ?? [], partners: partners ?? [], forms: forms ?? [] };
 }
 
-/** Adds village/experience ids and the guest count to each visit. */
+/** Adds village/experience ids and the guest list to each visit. */
 export async function attachVisitRelations(supabase: Client, visits: VisitRow[]): Promise<VisitListItem[]> {
   if (visits.length === 0) return [];
   const scoped = visits.length <= MAX_ID_FILTER ? visits.map((v) => v.id) : null;
 
   const villagesQuery = supabase.from("visit_villages").select("visit_id, village_id");
   const experiencesQuery = supabase.from("visit_experiences").select("visit_id, experience_id");
-  const guestsQuery = supabase.from("visit_guests").select("visit_id");
+  const guestsQuery = supabase
+    .from("visit_guests")
+    .select("id, visit_id, status, created_at, leads(name, phone)")
+    .order("created_at");
 
   const [{ data: villageRows }, { data: experienceRows }, { data: guestRows }] = await Promise.all([
     scoped ? villagesQuery.in("visit_id", scoped) : villagesQuery,
@@ -40,15 +43,17 @@ export async function attachVisitRelations(supabase: Client, visits: VisitRow[])
   for (const row of experienceRows ?? []) {
     experienceIds.set(row.visit_id, [...(experienceIds.get(row.visit_id) ?? []), row.experience_id]);
   }
-  const guestCounts = new Map<string, number>();
+  const guests = new Map<string, VisitGuestSummary[]>();
   for (const row of guestRows ?? []) {
-    guestCounts.set(row.visit_id, (guestCounts.get(row.visit_id) ?? 0) + 1);
+    const guest = { id: row.id, name: row.leads?.name ?? null, phone: row.leads?.phone ?? "", status: row.status };
+    guests.set(row.visit_id, [...(guests.get(row.visit_id) ?? []), guest]);
   }
 
   return visits.map((visit) => ({
     ...visit,
     villageIds: villageIds.get(visit.id) ?? [],
     experienceIds: experienceIds.get(visit.id) ?? [],
-    guestCount: guestCounts.get(visit.id) ?? 0,
+    guestCount: guests.get(visit.id)?.length ?? 0,
+    guests: guests.get(visit.id) ?? [],
   }));
 }

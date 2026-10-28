@@ -2,12 +2,23 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, Check, Envelope, Eye, LayoutCells, Pencil, Persons, Plus, Xmark } from "@gravity-ui/icons";
+import {
+  Calendar,
+  ChevronRight,
+  Ellipsis,
+  Envelope,
+  LayoutCells,
+  Pencil,
+  Persons,
+  Plus,
+  Xmark,
+} from "@gravity-ui/icons";
 import {
   Button,
   Chip,
   DateField,
   DateRangePicker,
+  Dropdown,
   Label,
   ListBox,
   RangeCalendar,
@@ -16,15 +27,25 @@ import {
   Table,
   Tabs,
   toast,
+  type Selection,
 } from "@heroui/react";
 import type { CalendarDate } from "@internationalized/date";
-import { setVisitStatus } from "@/lib/actions/visits";
-import { PROGRAM_CATEGORIES, VISIT_STATUSES, bookingChannelLabel, visitorCategoryLabel } from "@/lib/visits/constants";
+import { setVisitDetailView, setVisitStatus } from "@/lib/actions/visits";
+import { formatPhone } from "@/lib/mastra/phone";
+import {
+  PROGRAM_CATEGORIES,
+  VISIT_STATUSES,
+  bookingChannelLabel,
+  guestStatusLabel,
+  visitStatusLabel,
+  visitorCategoryLabel,
+  type VisitDetailView,
+} from "@/lib/visits/constants";
 import { formatDateRange, formatTimeRange } from "@/lib/visits/time";
 import type { VisitListItem, VisitReference } from "@/lib/visits/types";
 import { VisitMessagingModal, useVisitMessaging } from "../messaging/visit-messaging-modal";
 import { VisitsCalendar } from "./calendar-view";
-import { VisitDetailDrawer } from "./visit-detail-drawer";
+import { VisitDetailPanel } from "./visit-detail-panel";
 import { VisitFormModal } from "./visit-form-modal";
 import { VisitGuestsModal, useVisitGuests } from "./visit-guests-modal";
 import { VisitStatusChip } from "./visit-status-chip";
@@ -121,6 +142,73 @@ function DateRangeFilter({ value, onChange }: { value: DateRange | null; onChang
   );
 }
 
+const GUEST_ROW_PREFIX = "guest:";
+
+function VisitActionsMenu({
+  visit,
+  onEdit,
+  onGuests,
+  onMessages,
+  onStatusChange,
+}: {
+  visit: VisitListItem;
+  onEdit: () => void;
+  onGuests: () => void;
+  onMessages: () => void;
+  onStatusChange: (status: string) => void;
+}) {
+  return (
+    <Dropdown>
+      <Button isIconOnly aria-label="Visit actions" size="sm" variant="ghost">
+        <Ellipsis className="size-4" />
+      </Button>
+      <Dropdown.Popover placement="bottom end">
+        <Dropdown.Menu
+          onAction={(key) => {
+            if (key === "edit") onEdit();
+            else if (key === "guests") onGuests();
+            else if (key === "messages") onMessages();
+          }}
+        >
+          <Dropdown.Item id="edit" textValue="Edit visit">
+            <Pencil className="size-4 shrink-0 text-muted" />
+            <Label>Edit visit</Label>
+          </Dropdown.Item>
+          <Dropdown.Item id="guests" textValue="Manage guests">
+            <Persons className="size-4 shrink-0 text-muted" />
+            <Label>Manage guests</Label>
+          </Dropdown.Item>
+          <Dropdown.Item id="messages" textValue="Scheduled messages">
+            <Envelope className="size-4 shrink-0 text-muted" />
+            <Label>Scheduled messages</Label>
+          </Dropdown.Item>
+          <Dropdown.SubmenuTrigger>
+            <Dropdown.Item id="status" textValue="Change status">
+              <span aria-hidden className="size-4 shrink-0" />
+              <Label>Change status</Label>
+              <Dropdown.SubmenuIndicator />
+            </Dropdown.Item>
+            <Dropdown.Popover>
+              <Dropdown.Menu
+                selectedKeys={new Set([visit.status])}
+                selectionMode="single"
+                onAction={(key) => onStatusChange(String(key))}
+              >
+                {VISIT_STATUSES.map((s) => (
+                  <Dropdown.Item key={s.id} id={s.id} textValue={s.label}>
+                    <Dropdown.ItemIndicator />
+                    <Label>{s.label}</Label>
+                  </Dropdown.Item>
+                ))}
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown.SubmenuTrigger>
+        </Dropdown.Menu>
+      </Dropdown.Popover>
+    </Dropdown>
+  );
+}
+
 /** Trips and calendar in one place: shared filters, two ways to look at the result. */
 export function TripsView({
   visits,
@@ -129,11 +217,14 @@ export function TripsView({
   initialView,
   initialMonth,
   initialVisitId,
+  initialDetailView,
 }: {
   visits: VisitListItem[];
   reference: VisitReference;
   today: string;
   initialView: TripsViewMode;
+  /** Sidebar or pop-up, as this user last chose. */
+  initialDetailView: VisitDetailView;
   initialMonth: string;
   /** Opens this visit's details on load (links from elsewhere, e.g. the inbox). */
   initialVisitId: string | null;
@@ -150,6 +241,9 @@ export function TripsView({
 
   const [detailId, setDetailId] = useState<string | null>(initialVisitId);
   const [isDetailOpen, setIsDetailOpen] = useState(initialVisitId !== null);
+  const [detailView, setDetailView] = useState<VisitDetailView>(initialDetailView);
+  // Guests are shown nested under every visit; this tracks the ones folded away.
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [editing, setEditing] = useState<VisitListItem | null>(null);
   const [formDate, setFormDate] = useState(today);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -189,6 +283,16 @@ export function TripsView({
     });
   }, [visits, status, program, villageId, dateRange, query, villageName]);
 
+  const expandedKeys = useMemo(
+    () => new Set(filtered.filter((v) => v.guests.length > 0 && !collapsed.has(v.id)).map((v) => v.id)),
+    [filtered, collapsed],
+  );
+
+  function handleExpandedChange(keys: Selection) {
+    const expanded = keys === "all" ? null : keys;
+    setCollapsed(new Set(filtered.filter((v) => expanded && !expanded.has(v.id)).map((v) => v.id)));
+  }
+
   const filtersActive = query !== "" || status !== ALL || program !== ALL || villageId !== ALL || dateRange !== null;
 
   function changeView(next: TripsViewMode) {
@@ -222,14 +326,30 @@ export function TripsView({
     setIsFormOpen(true);
   }
 
-  async function handleComplete(visit: VisitListItem) {
-    const result = await setVisitStatus(visit.id, "completed");
+  /** A guest row opens the details of the visit it belongs to. */
+  function handleRowAction(key: React.Key) {
+    const id = String(key);
+    const visit = id.startsWith(GUEST_ROW_PREFIX)
+      ? visits.find((v) => v.guests.some((g) => `${GUEST_ROW_PREFIX}${g.id}` === id))
+      : visits.find((v) => v.id === id);
+    if (visit) openDetail(visit);
+  }
+
+  async function handleStatusChange(visit: VisitListItem, next: string) {
+    if (next === visit.status) return;
+    const result = await setVisitStatus(visit.id, next);
     if (result.error) {
       toast.danger(result.error);
       return;
     }
-    toast.success("Visit marked completed");
+    toast.success(`Status changed to ${visitStatusLabel(next)}`);
     router.refresh();
+  }
+
+  async function changeDetailView(next: VisitDetailView) {
+    setDetailView(next);
+    const result = await setVisitDetailView(next);
+    if (result.error) toast.danger(result.error);
   }
 
   return (
@@ -320,9 +440,18 @@ export function TripsView({
       ) : (
         <Table>
           <Table.ScrollContainer>
-            <Table.Content aria-label="Visits" className="w-full min-w-[980px]">
+            <Table.Content
+              aria-label="Visits"
+              className="w-full min-w-[980px]"
+              expandedKeys={expandedKeys}
+              treeColumn="date"
+              onExpandedChange={handleExpandedChange}
+              onRowAction={handleRowAction}
+            >
               <Table.Header>
-                <Table.Column isRowHeader>Date</Table.Column>
+                <Table.Column isRowHeader id="date">
+                  Date
+                </Table.Column>
                 <Table.Column>Visit</Table.Column>
                 <Table.Column>Coordinator</Table.Column>
                 <Table.Column>Group</Table.Column>
@@ -330,18 +459,45 @@ export function TripsView({
                 <Table.Column>Villages</Table.Column>
                 <Table.Column>Guests</Table.Column>
                 <Table.Column>Status</Table.Column>
-                <Table.Column className="w-48 text-right">
+                <Table.Column className="w-14 text-right">
                   <span className="sr-only">Actions</span>
                 </Table.Column>
               </Table.Header>
               <Table.Body>
                 {filtered.map((visit) => (
-                  <Table.Row key={visit.id}>
+                  <Table.Row
+                    key={visit.id}
+                    className="cursor-pointer"
+                    id={visit.id}
+                    textValue={`${formatDateRange(visit.visit_date, visit.end_date)} ${visit.visit_type}`}
+                  >
                     <Table.Cell className="whitespace-nowrap font-medium">
-                      {formatDateRange(visit.visit_date, visit.end_date)}
-                      <span className="block text-xs font-normal text-muted">
-                        {formatTimeRange(visit.start_time, visit.end_time)}
-                      </span>
+                      {({ hasChildItems, isExpanded }) => (
+                        <span className="flex items-start gap-1">
+                          {hasChildItems ? (
+                            <Button
+                              isIconOnly
+                              aria-label={isExpanded ? "Hide guests" : "Show guests"}
+                              className="-ml-1"
+                              size="sm"
+                              slot="chevron"
+                              variant="ghost"
+                            >
+                              <ChevronRight
+                                className={`size-4 text-muted transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}
+                              />
+                            </Button>
+                          ) : (
+                            <span aria-hidden className="w-7 shrink-0" />
+                          )}
+                          <span>
+                            {formatDateRange(visit.visit_date, visit.end_date)}
+                            <span className="block text-xs font-normal text-muted">
+                              {formatTimeRange(visit.start_time, visit.end_time)}
+                            </span>
+                          </span>
+                        </span>
+                      )}
                     </Table.Cell>
                     <Table.Cell>
                       {visit.visit_type}
@@ -377,30 +533,48 @@ export function TripsView({
                       </div>
                     </Table.Cell>
                     <Table.Cell>
-                      <Button size="sm" variant="secondary" onPress={() => guestsModal.open(visit)}>
-                        <Persons className="size-4" />
+                      <span className="inline-flex items-center gap-1.5 tabular-nums">
+                        <Persons className="size-4 text-muted" />
                         {visit.guestCount}
-                      </Button>
+                      </span>
                     </Table.Cell>
                     <Table.Cell>
                       <VisitStatusChip status={visit.status} />
                     </Table.Cell>
                     <Table.Cell className="text-right">
-                      <Button isIconOnly aria-label="View details" size="sm" variant="ghost" onPress={() => openDetail(visit)}>
-                        <Eye className="size-4" />
-                      </Button>
-                      <Button isIconOnly aria-label="Scheduled messages" size="sm" variant="ghost" onPress={() => messaging.open(visit)}>
-                        <Envelope className="size-4" />
-                      </Button>
-                      {visit.status !== "completed" && visit.status !== "cancelled" ? (
-                        <Button isIconOnly aria-label="Mark completed" size="sm" variant="ghost" onPress={() => handleComplete(visit)}>
-                          <Check className="size-4" />
-                        </Button>
-                      ) : null}
-                      <Button isIconOnly aria-label="Edit visit" size="sm" variant="ghost" onPress={() => openForm(visit)}>
-                        <Pencil className="size-4" />
-                      </Button>
+                      <VisitActionsMenu
+                        visit={visit}
+                        onEdit={() => openForm(visit)}
+                        onGuests={() => guestsModal.open(visit)}
+                        onMessages={() => messaging.open(visit)}
+                        onStatusChange={(next) => handleStatusChange(visit, next)}
+                      />
                     </Table.Cell>
+                    <Table.Collection items={visit.guests}>
+                      {(guest) => (
+                        <Table.Row
+                          className="cursor-pointer bg-neutral-50/70"
+                          id={`${GUEST_ROW_PREFIX}${guest.id}`}
+                          textValue={guest.name ?? guest.phone}
+                        >
+                          <Table.Cell>
+                            <span className="block pl-8 text-sm">{guest.name ?? "Unnamed contact"}</span>
+                          </Table.Cell>
+                          <Table.Cell className="whitespace-nowrap text-sm tabular-nums text-muted">
+                            {formatPhone(guest.phone)}
+                          </Table.Cell>
+                          <Table.Cell>{null}</Table.Cell>
+                          <Table.Cell>{null}</Table.Cell>
+                          <Table.Cell>{null}</Table.Cell>
+                          <Table.Cell>{null}</Table.Cell>
+                          <Table.Cell>{null}</Table.Cell>
+                          <Table.Cell>
+                            <span className="text-xs text-muted">{guestStatusLabel(guest.status)}</span>
+                          </Table.Cell>
+                          <Table.Cell>{null}</Table.Cell>
+                        </Table.Row>
+                      )}
+                    </Table.Collection>
                   </Table.Row>
                 ))}
               </Table.Body>
@@ -409,11 +583,13 @@ export function TripsView({
         </Table>
       )}
 
-      <VisitDetailDrawer
+      <VisitDetailPanel
         isOpen={isDetailOpen}
         reference={reference}
+        view={detailView}
         visit={detailVisit}
-        onComplete={handleComplete}
+        onStatusChange={handleStatusChange}
+        onViewChange={changeDetailView}
         onEdit={(visit) => openForm(visit, visit.visit_date ?? today)}
         onGuests={(visit) => {
           setIsDetailOpen(false);

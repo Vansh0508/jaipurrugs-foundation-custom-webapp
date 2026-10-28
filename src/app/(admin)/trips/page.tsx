@@ -18,7 +18,7 @@ export default async function TripsPage({
   const params = await searchParams;
   const supabase = await createClient();
 
-  const [{ data: visits }, reference] = await Promise.all([
+  const [{ data: visits }, reference, { data: auth }] = await Promise.all([
     supabase
       .from("visits")
       .select("*")
@@ -26,6 +26,8 @@ export default async function TripsPage({
       .order("start_time", { ascending: false, nullsFirst: false })
       .limit(VISIT_LIMIT),
     loadVisitReference(supabase),
+    // getUser (not the JWT claims) so a preference saved moments ago is already reflected.
+    supabase.auth.getUser(),
   ]);
 
   const visitId = params.visit && UUID_PATTERN.test(params.visit) ? params.visit : null;
@@ -46,6 +48,7 @@ export default async function TripsPage({
         </p>
       </div>
       <TripsView
+        initialDetailView={auth.user?.user_metadata?.visit_detail_view === "popup" ? "popup" : "sidebar"}
         initialMonth={month}
         initialView={params.view === "calendar" ? "calendar" : "grid"}
         initialVisitId={linkedVisit ? linkedVisit.id : null}

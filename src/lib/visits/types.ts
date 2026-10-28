@@ -7,6 +7,15 @@ export type VisitListItem = VisitRow & {
   villageIds: string[];
   experienceIds: string[];
   guestCount: number;
+  /** Shown nested under the visit in the trips grid. */
+  guests: VisitGuestSummary[];
+};
+
+export type VisitGuestSummary = {
+  id: string;
+  name: string | null;
+  phone: string;
+  status: string;
 };
 
 export type VillageOption = Pick<Tables<"villages">, "id" | "name" | "is_active">;

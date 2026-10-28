@@ -4,24 +4,27 @@ import { useMemo, useState } from "react";
 import { Check } from "@gravity-ui/icons";
 import {
   AlertDialog,
+  Autocomplete,
   Button,
   Checkbox,
   CheckboxGroup,
-  ComboBox,
   DateField,
   DateRangePicker,
-  Description,
+  EmptyState,
   Input,
   Label,
   ListBox,
   Modal,
   RangeCalendar,
+  SearchField,
   Select,
   Tag,
   TagGroup,
   TextArea,
   TextField,
   TimeField,
+  useFilter,
+  type Key,
 } from "@heroui/react";
 import { parseDate, parseTime, type CalendarDate, type Time } from "@internationalized/date";
 import { findOrCreateVillage } from "@/lib/actions/villages";
@@ -88,7 +91,6 @@ function OptionSelect({
   options,
   noneLabel,
   isRequired,
-  description,
   placeholder,
 }: {
   label: string;
@@ -97,7 +99,6 @@ function OptionSelect({
   options: readonly { id: string; label: string }[];
   noneLabel?: string;
   isRequired?: boolean;
-  description?: string;
   placeholder?: string;
 }) {
   return (
@@ -112,7 +113,6 @@ function OptionSelect({
         <Select.Value />
         <Select.Indicator />
       </Select.Trigger>
-      {description ? <Description>{description}</Description> : null}
       <Select.Popover>
         <ListBox>
           {noneLabel ? (
@@ -172,8 +172,9 @@ function StepIndicator({
 }
 
 /**
- * Search the locations (villages) and pick as many as needed. Typing a name that
- * matches nothing and pressing Enter adds it as a new location.
+ * Search the locations (villages) and tick as many as needed; chosen ones stay in the
+ * list with a check mark. Typing a name that matches nothing and pressing Enter adds
+ * it as a new location.
  */
 function LocationPicker({
   locations,
@@ -187,118 +188,122 @@ function LocationPicker({
   onCreated: (village: VillageOption) => void;
 }) {
   const [input, setInput] = useState("");
-  // Remounting the combo box after each pick is the simplest way to clear it.
-  const [pickerKey, setPickerKey] = useState(0);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { contains } = useFilter({ sensitivity: "base" });
 
-  const query = input.trim().toLowerCase();
-  const available = locations.filter((l) => l.is_active && !selectedIds.includes(l.id));
-  const matches = query ? available.filter((l) => l.name.toLowerCase().includes(query)) : available;
-  const exact = locations.find((l) => l.name.trim().toLowerCase() === query);
-  const canCreate = query.length > 0 && matches.length === 0 && !exact;
+  const query = input.trim();
+  // Inactive locations are only listed while chosen, so they can still be unticked.
+  const options = locations.filter((l) => l.is_active || selectedIds.includes(l.id));
+  const exact = locations.find((l) => l.name.trim().toLowerCase() === query.toLowerCase());
+  const canCreate = query.length > 0 && !exact && !options.some((l) => contains(l.name, query));
   const selected = selectedIds
     .map((id) => locations.find((l) => l.id === id))
     .filter((l): l is VillageOption => Boolean(l));
-
-  function add(id: string) {
-    if (!selectedIds.includes(id)) onChange([...selectedIds, id]);
-    setInput("");
-    setError(null);
-    setPickerKey((k) => k + 1);
-  }
 
   async function create() {
     if (!canCreate || isCreating) return;
     setIsCreating(true);
     setError(null);
-    const result = await findOrCreateVillage(input);
+    const result = await findOrCreateVillage(query);
     setIsCreating(false);
     if (result.error || !result.village) {
       setError(result.error ?? "Could not add the location.");
       return;
     }
     onCreated(result.village);
-    add(result.village.id);
+    if (!selectedIds.includes(result.village.id)) onChange([...selectedIds, result.village.id]);
+    setInput("");
   }
 
   return (
     <div className="flex flex-col gap-3">
-      <ComboBox
-        key={pickerKey}
-        allowsCustomValue
+      <Autocomplete
         allowsEmptyCollection
         fullWidth
-        autoFocus={pickerKey > 0}
-        defaultFilter={() => true}
-        inputValue={input}
-        selectedKey={null}
-        onInputChange={(value) => {
-          setInput(value);
+        placeholder="Choose locations"
+        selectionMode="multiple"
+        value={selectedIds}
+        onChange={(keys) => {
+          onChange(((keys as Key[] | null) ?? []).map(String));
           setError(null);
-        }}
-        onSelectionChange={(key) => {
-          if (key) add(String(key));
         }}
       >
         <Label>Locations</Label>
-        <ComboBox.InputGroup>
-          <Input
-            placeholder="Search, or type a new location and press Enter"
-            onKeyDown={(e) => {
-              if (e.key !== "Enter") return;
-              // Never let Enter here submit the step.
-              e.preventDefault();
-              if (canCreate) void create();
+        <Autocomplete.Trigger>
+          <Autocomplete.Value>
+            {({ defaultChildren, isPlaceholder }) =>
+              isPlaceholder || selected.length === 0 ? (
+                defaultChildren
+              ) : (
+                <TagGroup
+                  aria-label="Chosen locations"
+                  size="sm"
+                  onRemove={(keys) => onChange(selectedIds.filter((id) => !keys.has(id)))}
+                >
+                  <TagGroup.List>
+                    {selected.map((location) => (
+                      <Tag key={location.id} id={location.id} textValue={location.name}>
+                        {location.name}
+                        {!location.is_active ? " (inactive)" : ""}
+                      </Tag>
+                    ))}
+                  </TagGroup.List>
+                </TagGroup>
+              )
+            }
+          </Autocomplete.Value>
+          <Autocomplete.ClearButton />
+          <Autocomplete.Indicator />
+        </Autocomplete.Trigger>
+        <Autocomplete.Popover>
+          <Autocomplete.Filter
+            filter={contains}
+            inputValue={input}
+            onInputChange={(value) => {
+              setInput(value);
+              setError(null);
             }}
-          />
-          <ComboBox.Trigger />
-        </ComboBox.InputGroup>
-        <ComboBox.Popover>
-          <ListBox
-            renderEmptyState={() => (
-              <p className="px-3 py-2 text-sm text-muted">
-                {canCreate
-                  ? `No match. Press Enter to add “${input.trim()}” as a new location.`
-                  : exact && selectedIds.includes(exact.id)
-                    ? `${exact.name} is already added.`
-                    : "Every location is already added."}
-              </p>
-            )}
           >
-            {matches.map((location) => (
-              <ListBox.Item key={location.id} id={location.id} textValue={location.name}>
-                {location.name}
-                <ListBox.ItemIndicator />
-              </ListBox.Item>
-            ))}
-          </ListBox>
-        </ComboBox.Popover>
-      </ComboBox>
+            <SearchField autoFocus aria-label="Search locations" name="location-search" variant="secondary">
+              <SearchField.Group>
+                <SearchField.SearchIcon />
+                <SearchField.Input
+                  placeholder="Search, or type a new location and press Enter"
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter" || !canCreate) return;
+                    e.preventDefault();
+                    void create();
+                  }}
+                />
+                <SearchField.ClearButton />
+              </SearchField.Group>
+            </SearchField>
+            <ListBox
+              renderEmptyState={() => (
+                <EmptyState>
+                  {canCreate ? `No match. Press Enter to add “${query}” as a new location.` : "No matching location."}
+                </EmptyState>
+              )}
+            >
+              {options.map((location) => (
+                <ListBox.Item key={location.id} id={location.id} textValue={location.name}>
+                  {location.name}
+                  {!location.is_active ? <span className="text-muted"> (inactive)</span> : null}
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              ))}
+            </ListBox>
+          </Autocomplete.Filter>
+        </Autocomplete.Popover>
+      </Autocomplete>
 
       {canCreate ? (
         <Button className="self-start" isPending={isCreating} size="sm" variant="secondary" onPress={create}>
-          Add “{input.trim()}” as a new location
+          Add “{query}” as a new location
         </Button>
       ) : null}
       {error ? <p className="text-sm text-danger">{error}</p> : null}
-
-      <TagGroup
-        aria-label="Chosen locations"
-        onRemove={(keys) => onChange(selectedIds.filter((id) => !keys.has(id)))}
-      >
-        <TagGroup.List
-          items={selected}
-          renderEmptyState={() => <p className="text-sm text-muted">No locations chosen yet.</p>}
-        >
-          {(location) => (
-            <Tag id={location.id} textValue={location.name}>
-              {location.name}
-              {!location.is_active ? " (inactive)" : ""}
-            </Tag>
-          )}
-        </TagGroup.List>
-      </TagGroup>
     </div>
   );
 }
@@ -497,80 +502,81 @@ function VisitForm({
 
         {step === 0 ? (
           <div className="grid gap-4 sm:grid-cols-2">
-            <OptionSelect
-              isRequired
-              description="Only Rural Experience visits feed the impact numbers on the dashboard."
-              label="Program"
-              options={PROGRAM_CATEGORIES}
-              value={programCategory}
-              onChange={setProgramCategory}
-            />
-            <OptionSelect isRequired label="Status" options={VISIT_STATUSES} value={status} onChange={setStatus} />
+            <div className="grid gap-4 sm:col-span-2 sm:grid-cols-3">
+              <OptionSelect
+                isRequired
+                label="Program"
+                options={PROGRAM_CATEGORIES}
+                value={programCategory}
+                onChange={setProgramCategory}
+              />
+              <OptionSelect isRequired label="Status" options={VISIT_STATUSES} value={status} onChange={setStatus} />
+              <TextField value={headcount} onChange={setHeadcount}>
+                <Label>Headcount</Label>
+                <Input min={0} placeholder="e.g. 12" type="number" />
+              </TextField>
+            </div>
 
-            <DateRangePicker
-              isRequired
-              className="sm:col-span-2"
-              endName="endDate"
-              startName="visitDate"
-              value={dates}
-              onChange={(value) => setDates(value as { start: CalendarDate; end: CalendarDate } | null)}
-            >
-              <Label>Dates</Label>
-              <DateField.Group fullWidth>
-                <DateField.Input slot="start">{(segment) => <DateField.Segment segment={segment} />}</DateField.Input>
-                <DateRangePicker.RangeSeparator />
-                <DateField.Input slot="end">{(segment) => <DateField.Segment segment={segment} />}</DateField.Input>
-                <DateField.Suffix>
-                  <DateRangePicker.Trigger>
-                    <DateRangePicker.TriggerIndicator />
-                  </DateRangePicker.Trigger>
-                </DateField.Suffix>
-              </DateField.Group>
-              <Description>For a one-day visit, pick the same day twice.</Description>
-              <DateRangePicker.Popover>
-                <RangeCalendar aria-label="Visit dates">
-                  <RangeCalendar.Header>
-                    <RangeCalendar.YearPickerTrigger>
-                      <RangeCalendar.YearPickerTriggerHeading />
-                      <RangeCalendar.YearPickerTriggerIndicator />
-                    </RangeCalendar.YearPickerTrigger>
-                    <RangeCalendar.NavButton slot="previous" />
-                    <RangeCalendar.NavButton slot="next" />
-                  </RangeCalendar.Header>
-                  <RangeCalendar.Grid>
-                    <RangeCalendar.GridHeader>
-                      {(day) => <RangeCalendar.HeaderCell>{day}</RangeCalendar.HeaderCell>}
-                    </RangeCalendar.GridHeader>
-                    <RangeCalendar.GridBody>{(date) => <RangeCalendar.Cell date={date} />}</RangeCalendar.GridBody>
-                  </RangeCalendar.Grid>
-                  <RangeCalendar.YearPickerGrid>
-                    <RangeCalendar.YearPickerGridBody>
-                      {({ year }) => <RangeCalendar.YearPickerCell year={year} />}
-                    </RangeCalendar.YearPickerGridBody>
-                  </RangeCalendar.YearPickerGrid>
-                </RangeCalendar>
-              </DateRangePicker.Popover>
-            </DateRangePicker>
+            <div className="grid gap-4 rounded-xl border border-border p-3 sm:col-span-2 sm:grid-cols-2">
+              <DateRangePicker
+                isRequired
+                endName="endDate"
+                startName="visitDate"
+                value={dates}
+                onChange={(value) => setDates(value as { start: CalendarDate; end: CalendarDate } | null)}
+              >
+                <Label>Dates</Label>
+                <DateField.Group fullWidth>
+                  <DateField.Input slot="start">{(segment) => <DateField.Segment segment={segment} />}</DateField.Input>
+                  <DateRangePicker.RangeSeparator />
+                  <DateField.Input slot="end">{(segment) => <DateField.Segment segment={segment} />}</DateField.Input>
+                  <DateField.Suffix>
+                    <DateRangePicker.Trigger>
+                      <DateRangePicker.TriggerIndicator />
+                    </DateRangePicker.Trigger>
+                  </DateField.Suffix>
+                </DateField.Group>
+                <DateRangePicker.Popover>
+                  <RangeCalendar aria-label="Visit dates">
+                    <RangeCalendar.Header>
+                      <RangeCalendar.YearPickerTrigger>
+                        <RangeCalendar.YearPickerTriggerHeading />
+                        <RangeCalendar.YearPickerTriggerIndicator />
+                      </RangeCalendar.YearPickerTrigger>
+                      <RangeCalendar.NavButton slot="previous" />
+                      <RangeCalendar.NavButton slot="next" />
+                    </RangeCalendar.Header>
+                    <RangeCalendar.Grid>
+                      <RangeCalendar.GridHeader>
+                        {(day) => <RangeCalendar.HeaderCell>{day}</RangeCalendar.HeaderCell>}
+                      </RangeCalendar.GridHeader>
+                      <RangeCalendar.GridBody>{(date) => <RangeCalendar.Cell date={date} />}</RangeCalendar.GridBody>
+                    </RangeCalendar.Grid>
+                    <RangeCalendar.YearPickerGrid>
+                      <RangeCalendar.YearPickerGridBody>
+                        {({ year }) => <RangeCalendar.YearPickerCell year={year} />}
+                      </RangeCalendar.YearPickerGridBody>
+                    </RangeCalendar.YearPickerGrid>
+                  </RangeCalendar>
+                </DateRangePicker.Popover>
+              </DateRangePicker>
 
-            <div className="flex flex-col gap-1 sm:col-span-2">
-              <span className="text-sm font-medium">Time (IST)</span>
-              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-                <TimeField aria-label="Start time" value={startTime} onChange={setStartTime}>
-                  <TimeField.Group fullWidth>
-                    <TimeField.Input>{(segment) => <TimeField.Segment segment={segment} />}</TimeField.Input>
-                  </TimeField.Group>
-                </TimeField>
-                <span className="text-sm text-muted">to</span>
-                <TimeField aria-label="End time" value={endTime} onChange={setEndTime}>
-                  <TimeField.Group fullWidth>
-                    <TimeField.Input>{(segment) => <TimeField.Segment segment={segment} />}</TimeField.Input>
-                  </TimeField.Group>
-                </TimeField>
+              <div className="flex flex-col gap-1">
+                <span className="text-sm font-medium">Time (IST)</span>
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                  <TimeField aria-label="Start time" hourCycle={12} value={startTime} onChange={setStartTime}>
+                    <TimeField.Group fullWidth>
+                      <TimeField.Input>{(segment) => <TimeField.Segment segment={segment} />}</TimeField.Input>
+                    </TimeField.Group>
+                  </TimeField>
+                  <span className="text-sm text-muted">to</span>
+                  <TimeField aria-label="End time" hourCycle={12} value={endTime} onChange={setEndTime}>
+                    <TimeField.Group fullWidth>
+                      <TimeField.Input>{(segment) => <TimeField.Segment segment={segment} />}</TimeField.Input>
+                    </TimeField.Group>
+                  </TimeField>
+                </div>
               </div>
-              <p className="text-xs text-muted">
-                Pickup and reminder messages are scheduled from the start time; the after-visit sequence starts when
-                the visit is marked completed.
-              </p>
             </div>
 
             <OptionSelect
@@ -582,7 +588,6 @@ function VisitForm({
               onChange={setVisitorCategory}
             />
             <OptionSelect
-              description={isRuralExperience ? "Required for Rural Experience visits." : undefined}
               isRequired={isRuralExperience}
               label="Booking channel"
               noneLabel="Not set"
@@ -615,10 +620,6 @@ function VisitForm({
               onChange={setPartnerId}
             />
 
-            <TextField value={headcount} onChange={setHeadcount}>
-              <Label>Headcount</Label>
-              <Input min={0} placeholder="e.g. 12" type="number" />
-            </TextField>
             <TextField value={originPlace} onChange={setOriginPlace}>
               <Label>Coming from</Label>
               <Input placeholder="e.g. Pune" />
@@ -653,7 +654,6 @@ function VisitForm({
                     );
                   })}
                 </div>
-                <Description>The WhatsApp agent tells each guest what is planned from these.</Description>
               </CheckboxGroup>
             ) : villageIds.length > 0 ? (
               <p className="text-sm text-muted">
@@ -677,16 +677,12 @@ function VisitForm({
               <Label>Amount to artisan families (₹)</Label>
               <Input min={0} placeholder="e.g. 9000" step="0.01" type="number" />
             </TextField>
-            <p className="text-xs text-muted sm:col-span-2">
-              Leave the amounts empty if they aren&apos;t known yet — you can fill them in later.
-            </p>
           </div>
         ) : null}
 
         {step === 3 ? (
           <div className="flex flex-col gap-4">
             <OptionSelect
-              description="Each guest gets their own link to this form in the after-visit WhatsApp message. Only published forms are listed; avoid file-upload questions — they aren't shown on the guest link."
               label="Feedback form"
               noneLabel="No feedback form"
               options={formOptions}

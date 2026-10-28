@@ -1,9 +1,16 @@
 "use client";
 
-import { Check, Envelope, Pencil, Persons } from "@gravity-ui/icons";
-import { Button, Chip, Drawer } from "@heroui/react";
+import type { ReactNode } from "react";
+import { ArrowsExpand, ChevronDown, Envelope, LayoutSideContentRight, Pencil, Persons } from "@gravity-ui/icons";
+import { Button, Chip, Drawer, Dropdown, Label, Modal } from "@heroui/react";
 import { formatPhone } from "@/lib/mastra/phone";
-import { bookingChannelLabel, programLabel, visitorCategoryLabel } from "@/lib/visits/constants";
+import {
+  VISIT_STATUSES,
+  bookingChannelLabel,
+  programLabel,
+  visitorCategoryLabel,
+  type VisitDetailView,
+} from "@/lib/visits/constants";
 import { formatDateRange, formatTimeRange } from "@/lib/visits/time";
 import type { VisitListItem, VisitReference } from "@/lib/visits/types";
 import { VisitStatusChip } from "./visit-status-chip";
@@ -148,65 +155,139 @@ function VisitDetails({
   );
 }
 
-export function VisitDetailDrawer({
+/** Status picker for a visit; the current status is ticked. */
+export function ChangeStatusMenu({
+  visit,
+  onStatusChange,
+}: {
+  visit: VisitListItem;
+  onStatusChange: (visit: VisitListItem, status: string) => void;
+}) {
+  return (
+    <Dropdown>
+      <Button variant="secondary">
+        Change status
+        <ChevronDown className="size-4" />
+      </Button>
+      <Dropdown.Popover>
+        <Dropdown.Menu
+          selectedKeys={new Set([visit.status])}
+          selectionMode="single"
+          onAction={(key) => onStatusChange(visit, String(key))}
+        >
+          {VISIT_STATUSES.map((s) => (
+            <Dropdown.Item key={s.id} id={s.id} textValue={s.label}>
+              <Dropdown.ItemIndicator />
+              <Label>{s.label}</Label>
+            </Dropdown.Item>
+          ))}
+        </Dropdown.Menu>
+      </Dropdown.Popover>
+    </Dropdown>
+  );
+}
+
+/**
+ * A visit's details, shown as a sidebar or a centred pop-up. The icon next to the close
+ * button switches between the two, and the choice is remembered for the user.
+ */
+export function VisitDetailPanel({
   visit,
   reference,
+  view,
+  onViewChange,
   isOpen,
   onOpenChange,
   onEdit,
   onGuests,
   onMessages,
-  onComplete,
+  onStatusChange,
 }: {
   visit: VisitListItem | null;
   reference: VisitReference;
+  view: VisitDetailView;
+  onViewChange: (view: VisitDetailView) => void;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onEdit: (visit: VisitListItem) => void;
   onGuests: (visit: VisitListItem) => void;
   onMessages: (visit: VisitListItem) => void;
-  onComplete: (visit: VisitListItem) => void;
+  onStatusChange: (visit: VisitListItem, status: string) => void;
 }) {
-  const canComplete = visit !== null && visit.status !== "completed" && visit.status !== "cancelled";
+  const viewToggle = (
+    <Button
+      isIconOnly
+      aria-label={view === "sidebar" ? "Open as pop-up" : "Open in sidebar"}
+      className="absolute right-12 top-3"
+      size="sm"
+      variant="ghost"
+      onPress={() => onViewChange(view === "sidebar" ? "popup" : "sidebar")}
+    >
+      {view === "sidebar" ? <ArrowsExpand className="size-4" /> : <LayoutSideContentRight className="size-4" />}
+    </Button>
+  );
+
+  function summary(heading: ReactNode) {
+    if (!visit) return null;
+    return (
+      <>
+        <span className="text-xs font-medium uppercase tracking-wide text-muted">{programLabel(visit.program_category)}</span>
+        {heading}
+        <div className="flex flex-wrap items-center gap-2 text-sm text-muted">
+          <VisitStatusChip status={visit.status} />
+          <span>{formatTimeRange(visit.start_time, visit.end_time)}</span>
+        </div>
+      </>
+    );
+  }
+
+  const body = visit ? <VisitDetails reference={reference} visit={visit} onGuests={() => onGuests(visit)} /> : null;
+
+  const actions = visit ? (
+    <>
+      <Button variant="tertiary" onPress={() => onMessages(visit)}>
+        <Envelope className="size-4" />
+        Messages
+      </Button>
+      <ChangeStatusMenu visit={visit} onStatusChange={onStatusChange} />
+      <Button onPress={() => onEdit(visit)}>
+        <Pencil className="size-4" />
+        Edit
+      </Button>
+    </>
+  ) : null;
+
+  const title = visit ? formatDateRange(visit.visit_date, visit.end_date) : "";
+
+  if (view === "popup") {
+    return (
+      <Modal.Backdrop isOpen={isOpen} onOpenChange={onOpenChange}>
+        <Modal.Container scroll="inside">
+          <Modal.Dialog className="sm:max-w-2xl">
+            <Modal.CloseTrigger />
+            {viewToggle}
+            <Modal.Header className="flex flex-col gap-2 border-b border-border/70 pb-4 pr-20">
+              {summary(<Modal.Heading className="text-lg">{title}</Modal.Heading>)}
+            </Modal.Header>
+            <Modal.Body className="py-5">{body}</Modal.Body>
+            <Modal.Footer className="flex flex-wrap justify-end gap-2 border-t border-border/70 pt-4">{actions}</Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    );
+  }
 
   return (
     <Drawer.Backdrop isOpen={isOpen} variant="transparent" onOpenChange={onOpenChange}>
       <Drawer.Content placement="right">
         <Drawer.Dialog className="w-full sm:max-w-md">
           <Drawer.CloseTrigger />
-          {visit ? (
-            <>
-              <Drawer.Header className="flex flex-col gap-2 border-b border-border/70 pb-4">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted">
-                  {programLabel(visit.program_category)}
-                </span>
-                <Drawer.Heading className="text-lg">{formatDateRange(visit.visit_date, visit.end_date)}</Drawer.Heading>
-                <div className="flex flex-wrap items-center gap-2 text-sm text-muted">
-                  <VisitStatusChip status={visit.status} />
-                  <span>{formatTimeRange(visit.start_time, visit.end_time)}</span>
-                </div>
-              </Drawer.Header>
-              <Drawer.Body className="py-5">
-                <VisitDetails reference={reference} visit={visit} onGuests={() => onGuests(visit)} />
-              </Drawer.Body>
-              <Drawer.Footer className="flex flex-wrap justify-end gap-2 border-t border-border/70 pt-4">
-                <Button variant="tertiary" onPress={() => onMessages(visit)}>
-                  <Envelope className="size-4" />
-                  Messages
-                </Button>
-                {canComplete ? (
-                  <Button variant="secondary" onPress={() => onComplete(visit)}>
-                    <Check className="size-4" />
-                    Mark completed
-                  </Button>
-                ) : null}
-                <Button onPress={() => onEdit(visit)}>
-                  <Pencil className="size-4" />
-                  Edit
-                </Button>
-              </Drawer.Footer>
-            </>
-          ) : null}
+          {viewToggle}
+          <Drawer.Header className="flex flex-col gap-2 border-b border-border/70 pb-4 pr-20">
+            {summary(<Drawer.Heading className="text-lg">{title}</Drawer.Heading>)}
+          </Drawer.Header>
+          <Drawer.Body className="py-5">{body}</Drawer.Body>
+          <Drawer.Footer className="flex flex-wrap justify-end gap-2 border-t border-border/70 pt-4">{actions}</Drawer.Footer>
         </Drawer.Dialog>
       </Drawer.Content>
     </Drawer.Backdrop>
