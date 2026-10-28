@@ -80,6 +80,29 @@ export function formatDate(date: string | null | undefined): string {
   });
 }
 
+/** A visit's dates: "10 Oct 2026", or "10 – 12 Oct 2026" for a multi-day visit. */
+export function formatDateRange(start: string | null | undefined, end: string | null | undefined): string {
+  if (!start || !end || end === start) return formatDate(start);
+  const [sy, sm] = start.split("-");
+  const [ey, em] = end.split("-");
+  if (sy === ey && sm === em) return `${Number(start.slice(8))} – ${formatDate(end)}`;
+  if (sy === ey) return `${formatDate(start).replace(/ \d{4}$/, "")} – ${formatDate(end)}`;
+  return `${formatDate(start)} – ${formatDate(end)}`;
+}
+
+/** Every YYYY-MM-DD from start to end inclusive (just start if end is unset). */
+export function daysBetween(start: string, end: string | null | undefined): string[] {
+  const days = [start];
+  if (!end || end <= start) return days;
+  const [y, m, d] = start.split("-").map(Number);
+  for (let i = 1; i < 366; i++) {
+    const day = new Date(Date.UTC(y, m - 1, d + i)).toISOString().slice(0, 10);
+    if (day > end) break;
+    days.push(day);
+  }
+  return days;
+}
+
 export function formatLongDate(date: string): string {
   const [y, m, d] = date.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-IN", {

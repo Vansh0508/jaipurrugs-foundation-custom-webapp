@@ -7,7 +7,6 @@ import {
   ArrowRightFromSquare,
   Bell,
   Briefcase,
-  Calendar,
   Comment,
   Comments,
   FileText,
@@ -38,7 +37,6 @@ const NAV_GROUPS: { label?: string; items: { href: string; label: string; icon: 
   {
     label: "Operations",
     items: [
-      { href: "/calendar", label: "Calendar", icon: Calendar },
       { href: "/trips", label: "Trips", icon: Suitcase },
       { href: "/villages", label: "Villages", icon: MapPin },
       { href: "/partners", label: "Partners", icon: Briefcase },

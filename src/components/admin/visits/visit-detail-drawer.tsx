@@ -1,0 +1,214 @@
+"use client";
+
+import { Check, Envelope, Pencil, Persons } from "@gravity-ui/icons";
+import { Button, Chip, Drawer } from "@heroui/react";
+import { formatPhone } from "@/lib/mastra/phone";
+import { bookingChannelLabel, programLabel, visitorCategoryLabel } from "@/lib/visits/constants";
+import { formatDateRange, formatTimeRange } from "@/lib/visits/time";
+import type { VisitListItem, VisitReference } from "@/lib/visits/types";
+import { VisitStatusChip } from "./visit-status-chip";
+
+const rupees = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
+
+type Row = { label: string; value: React.ReactNode };
+
+/** A titled block of label/value rows. Empty rows are dropped; an empty section isn't shown. */
+function Section({ title, rows, children }: { title: string; rows?: Row[]; children?: React.ReactNode }) {
+  const filled = (rows ?? []).filter((row) => row.value !== null && row.value !== undefined && row.value !== "");
+  if (filled.length === 0 && !children) return null;
+  return (
+    <section className="flex flex-col gap-2.5">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</h3>
+      {filled.length > 0 ? (
+        <dl className="grid grid-cols-[9rem_1fr] gap-x-4 gap-y-2 text-sm">
+          {filled.map((row) => (
+            <div key={row.label} className="contents">
+              <dt className="text-muted">{row.label}</dt>
+              <dd className="min-w-0 break-words">{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      {children}
+    </section>
+  );
+}
+
+function VisitDetails({
+  visit,
+  reference,
+  onGuests,
+}: {
+  visit: VisitListItem;
+  reference: VisitReference;
+  onGuests: () => void;
+}) {
+  const villages = visit.villageIds
+    .map((id) => reference.villages.find((v) => v.id === id)?.name)
+    .filter((name): name is string => Boolean(name));
+  const experiences = reference.experiences.filter((e) => visit.experienceIds.includes(e.id));
+  const partner = reference.partners.find((p) => p.id === visit.partner_id)?.name;
+  const feedbackForm = visit.feedback_form_id
+    ? (reference.forms.find((f) => f.id === visit.feedback_form_id)?.title ?? "Unavailable form")
+    : null;
+
+  return (
+    <div className="flex flex-col gap-6">
+      <Section
+        title="Visitors"
+        rows={[
+          { label: "Category", value: visit.visitor_category ? visitorCategoryLabel(visit.visitor_category) : visit.visitor_group },
+          { label: "Headcount", value: visit.headcount !== null ? `${visit.headcount} people` : null },
+          { label: "Coming from", value: visit.origin_place },
+          { label: "Institute / company", value: visit.source },
+          { label: "Booking channel", value: visit.booking_channel ? bookingChannelLabel(visit.booking_channel) : null },
+        ]}
+      />
+
+      <Section
+        title="Team"
+        rows={[
+          { label: "JRF coordinator", value: visit.poc_name },
+          {
+            label: "Coordinator phone",
+            value: visit.poc_phone ? (
+              <a className="text-accent hover:underline" href={`tel:${visit.poc_phone.replace(/\s+/g, "")}`}>
+                {formatPhone(visit.poc_phone)}
+              </a>
+            ) : null,
+          },
+          { label: "Facilitator / host", value: visit.facilitator },
+          { label: "Partner", value: partner },
+        ]}
+      />
+
+      <Section title="Locations">
+        {villages.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {villages.map((name) => (
+              <Chip key={name} size="sm" variant="soft">
+                {name}
+              </Chip>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted">No locations chosen.</p>
+        )}
+        {experiences.length > 0 ? (
+          <ul className="flex flex-col gap-1 text-sm">
+            {experiences.map((experience) => (
+              <li key={experience.id} className="flex gap-2">
+                <span className="text-muted">•</span>
+                <span>
+                  {experience.name}
+                  <span className="text-muted">
+                    {" "}
+                    — {reference.villages.find((v) => v.id === experience.village_id)?.name}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </Section>
+
+      <Section title="Guests">
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-border/70 px-3 py-2.5">
+          <span className="text-sm">
+            {visit.guestCount === 0
+              ? "No guests added yet"
+              : `${visit.guestCount} guest${visit.guestCount === 1 ? "" : "s"} on the list`}
+          </span>
+          <Button size="sm" variant="secondary" onPress={onGuests}>
+            <Persons className="size-4" />
+            Manage
+          </Button>
+        </div>
+      </Section>
+
+      <Section
+        title="Payment"
+        rows={[
+          { label: "Amount charged", value: visit.amount_charged !== null ? rupees.format(visit.amount_charged) : null },
+          {
+            label: "To artisan families",
+            value: visit.amount_to_artisans !== null ? rupees.format(visit.amount_to_artisans) : null,
+          },
+        ]}
+      />
+
+      <Section title="After the visit" rows={[{ label: "Feedback form", value: feedbackForm }]} />
+
+      {visit.notes ? (
+        <Section title="Internal notes">
+          <p className="whitespace-pre-wrap rounded-xl bg-neutral-50 px-3 py-2.5 text-sm">{visit.notes}</p>
+        </Section>
+      ) : null}
+    </div>
+  );
+}
+
+export function VisitDetailDrawer({
+  visit,
+  reference,
+  isOpen,
+  onOpenChange,
+  onEdit,
+  onGuests,
+  onMessages,
+  onComplete,
+}: {
+  visit: VisitListItem | null;
+  reference: VisitReference;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  onEdit: (visit: VisitListItem) => void;
+  onGuests: (visit: VisitListItem) => void;
+  onMessages: (visit: VisitListItem) => void;
+  onComplete: (visit: VisitListItem) => void;
+}) {
+  const canComplete = visit !== null && visit.status !== "completed" && visit.status !== "cancelled";
+
+  return (
+    <Drawer.Backdrop isOpen={isOpen} variant="transparent" onOpenChange={onOpenChange}>
+      <Drawer.Content placement="right">
+        <Drawer.Dialog className="w-full sm:max-w-md">
+          <Drawer.CloseTrigger />
+          {visit ? (
+            <>
+              <Drawer.Header className="flex flex-col gap-2 border-b border-border/70 pb-4">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted">
+                  {programLabel(visit.program_category)}
+                </span>
+                <Drawer.Heading className="text-lg">{formatDateRange(visit.visit_date, visit.end_date)}</Drawer.Heading>
+                <div className="flex flex-wrap items-center gap-2 text-sm text-muted">
+                  <VisitStatusChip status={visit.status} />
+                  <span>{formatTimeRange(visit.start_time, visit.end_time)}</span>
+                </div>
+              </Drawer.Header>
+              <Drawer.Body className="py-5">
+                <VisitDetails reference={reference} visit={visit} onGuests={() => onGuests(visit)} />
+              </Drawer.Body>
+              <Drawer.Footer className="flex flex-wrap justify-end gap-2 border-t border-border/70 pt-4">
+                <Button variant="tertiary" onPress={() => onMessages(visit)}>
+                  <Envelope className="size-4" />
+                  Messages
+                </Button>
+                {canComplete ? (
+                  <Button variant="secondary" onPress={() => onComplete(visit)}>
+                    <Check className="size-4" />
+                    Mark completed
+                  </Button>
+                ) : null}
+                <Button onPress={() => onEdit(visit)}>
+                  <Pencil className="size-4" />
+                  Edit
+                </Button>
+              </Drawer.Footer>
+            </>
+          ) : null}
+        </Drawer.Dialog>
+      </Drawer.Content>
+    </Drawer.Backdrop>
+  );
+}

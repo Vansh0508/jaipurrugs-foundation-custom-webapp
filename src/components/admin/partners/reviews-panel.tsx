@@ -135,7 +135,7 @@ export function ReviewsPanel({ reviews }: { reviews: ReviewRow[] }) {
         </div>
         <Dropdown>
           <Button size="sm" isPending={syncingSource !== null}>
-            Merge
+            Sync
             <ChevronDown className="size-4" />
           </Button>
           <Dropdown.Popover placement="bottom end">

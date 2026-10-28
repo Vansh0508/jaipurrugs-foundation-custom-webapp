@@ -51,6 +51,42 @@ export async function createVillage(input: VillageInput): Promise<VillageActionR
   return {};
 }
 
+/**
+ * Used by the visit form's location picker: returns the village with this name
+ * (reactivating it if it had been deactivated), or creates it.
+ */
+export async function findOrCreateVillage(
+  rawName: string,
+): Promise<VillageActionResult & { village?: { id: string; name: string; is_active: boolean } }> {
+  const { email } = await requireActiveTeamMember();
+  const name = rawName.trim().replace(/\s+/g, " ");
+  if (!name) return { error: "Type a location name first." };
+  if (name.length > 80) return { error: "Keep the location name under 80 characters." };
+
+  const supabase = await createClient();
+  const { data: villages } = await supabase.from("villages").select("id, name, is_active");
+  const existing = (villages ?? []).find((v) => v.name.trim().toLowerCase() === name.toLowerCase());
+  if (existing) {
+    if (!existing.is_active) {
+      const { error } = await supabase.from("villages").update({ is_active: true }).eq("id", existing.id);
+      if (error) return { error: "Could not reactivate that location." };
+      revalidateVillages();
+    }
+    return { village: { ...existing, is_active: true } };
+  }
+
+  const { data: created, error } = await supabase
+    .from("villages")
+    .insert({ name, created_by: email })
+    .select("id, name, is_active")
+    .single();
+  if (error || !created) return { error: "Could not add the location." };
+  revalidateVillages();
+  revalidatePath("/trips");
+  revalidatePath("/calendar");
+  return { village: created };
+}
+
 export async function updateVillage(id: string, input: VillageInput): Promise<VillageActionResult> {
   await requireActiveTeamMember();
   const parsed = villageSchema.safeParse(input);

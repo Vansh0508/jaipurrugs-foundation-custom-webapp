@@ -127,12 +127,14 @@ const optionalUuid = z.preprocess((v) => (blank(v) ? null : v), z.string().uuid(
 const optionalEnum = <T extends readonly [string, ...string[]]>(values: T) =>
   z.preprocess((v) => (blank(v) ? null : v), z.enum(values).nullable());
 
+const requiredDate = (message: string) => z.string(message).regex(/^\d{4}-\d{2}-\d{2}$/, message);
+
 export const visitSchema = z
   .object({
-    visitType: z.string().trim().min(1, "Visit type is required.").max(80),
-    visitDate: z
-      .string("Pick the visit date.")
-      .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the visit date."),
+    programCategory: z.enum(ids(PROGRAM_CATEGORIES), "Pick the program."),
+    visitDate: requiredDate("Pick the visit dates."),
+    // null for a single-day visit.
+    endDate: optionalDate,
     startTime: optionalTime,
     endTime: optionalTime,
     status: z.enum(ids(VISIT_STATUSES)),
@@ -141,27 +143,23 @@ export const visitSchema = z
     facilitator: optionalText(80),
     partnerId: optionalUuid,
     headcount: optionalInt(0, 100_000, "Headcount must be a whole number."),
-    visitorGroup: optionalText(120),
     source: optionalText(120),
     originPlace: optionalText(120),
-    programCategory: z.enum(ids(PROGRAM_CATEGORIES)),
-    visitorCategory: optionalEnum(ids(VISITOR_CATEGORIES)),
+    visitorCategory: z.enum(ids(VISITOR_CATEGORIES), "Pick the visitor category."),
     bookingChannel: optionalEnum(ids(BOOKING_CHANNELS)),
     amountCharged: optionalMoney,
     amountToArtisans: optionalMoney,
     notes: optionalText(2000),
     feedbackFormId: optionalUuid,
-    villageIds: z.array(z.string().uuid()).max(50),
+    villageIds: z.array(z.string().uuid()).min(1, "Pick at least one location.").max(50),
     experienceIds: z.array(z.string().uuid()).max(200),
   })
   .superRefine((visit, ctx) => {
-    if (visit.programCategory === "rural_experience") {
-      if (!visit.visitorCategory) {
-        ctx.addIssue({ code: "custom", message: "Pick the visitor category for a Rural Experience visit.", path: ["visitorCategory"] });
-      }
-      if (!visit.bookingChannel) {
-        ctx.addIssue({ code: "custom", message: "Pick the booking channel for a Rural Experience visit.", path: ["bookingChannel"] });
-      }
+    if (visit.endDate && visit.endDate < visit.visitDate) {
+      ctx.addIssue({ code: "custom", message: "The visit can't end before it starts.", path: ["endDate"] });
+    }
+    if (visit.programCategory === "rural_experience" && !visit.bookingChannel) {
+      ctx.addIssue({ code: "custom", message: "Pick the booking channel for a Rural Experience visit.", path: ["bookingChannel"] });
     }
   });
 

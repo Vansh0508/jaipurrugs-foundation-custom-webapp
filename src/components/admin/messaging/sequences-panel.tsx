@@ -13,6 +13,7 @@ import {
   updateRuleSet,
   updateRuleSetItem,
 } from "@/lib/actions/messaging";
+import { PROGRAM_CATEGORIES } from "@/lib/visits/constants";
 import { describeTiming, type RuleAnchor, type TemplateOption } from "@/lib/visits/messaging";
 import { RuleForm } from "./rule-form";
 
@@ -67,9 +68,14 @@ function SequenceForm({ set, onSaved }: { set: RuleSetRow | null; onSaved: () =>
         <Input placeholder="Optional" />
       </TextField>
       <TextField value={visitType} onChange={setVisitType}>
-        <Label>Apply automatically to visits of type</Label>
-        <Input placeholder="e.g. Rural Experience (leave empty to apply by hand)" />
-        <Description>New visits of exactly this type get these messages as soon as they are created.</Description>
+        <Label>Apply automatically to visits of program</Label>
+        <Input list="sequence-program-suggestions" placeholder="e.g. Rural Experience (leave empty to apply by hand)" />
+        <datalist id="sequence-program-suggestions">
+          {PROGRAM_CATEGORIES.map((p) => (
+            <option key={p.id} value={p.label} />
+          ))}
+        </datalist>
+        <Description>New visits of exactly this program get these messages as soon as they are created.</Description>
       </TextField>
       {error ? <p className="text-sm text-danger">{error}</p> : null}
       <Button fullWidth isPending={isPending} type="submit">

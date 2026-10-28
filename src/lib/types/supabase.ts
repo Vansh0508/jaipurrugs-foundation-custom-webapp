@@ -1168,6 +1168,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           end_at: string | null
+          end_date: string | null
           end_time: string | null
           facilitator: string | null
           feedback_form_id: string | null
@@ -1198,6 +1199,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           end_at?: string | null
+          end_date?: string | null
           end_time?: string | null
           facilitator?: string | null
           feedback_form_id?: string | null
@@ -1228,6 +1230,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           end_at?: string | null
+          end_date?: string | null
           end_time?: string | null
           facilitator?: string | null
           feedback_form_id?: string | null

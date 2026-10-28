@@ -12,6 +12,7 @@
     "@gravity-ui/icons": "^2.21.0",
     "@heroui/react": "^3.2.4",
     "@heroui/styles": "^3.2.4",
+    "@internationalized/date": "^3.12.4",
     "@mastra/core": "^1.74.0",
     "@number-flow/react": "^0.6.2",
     "@supabase/ssr": "^0.12.4",

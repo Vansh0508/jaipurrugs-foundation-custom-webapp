@@ -151,7 +151,7 @@ export function ContactProfile({ thread }: { thread: InboxThread }) {
               <li key={visit.id}>
                 <Link
                   className="flex flex-col rounded-lg border border-border/60 p-2 text-sm hover:bg-neutral-50"
-                  href={visit.visitDate ? `/calendar?month=${visit.visitDate.slice(0, 7)}` : "/trips"}
+                  href={`/trips?view=calendar&visit=${visit.id}`}
                 >
                   <span className="font-medium">{visit.visitType}</span>
                   <span className="text-xs text-muted">

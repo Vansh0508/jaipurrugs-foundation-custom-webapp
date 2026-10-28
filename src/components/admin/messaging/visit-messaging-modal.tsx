@@ -17,7 +17,7 @@ import {
   type VisitMessagingSend,
 } from "@/lib/actions/messaging";
 import { RESENDABLE_STATUSES, describeTiming, sendStatusMeta, type RuleAnchor, type RuleInput, type TemplateOption } from "@/lib/visits/messaging";
-import { formatDate } from "@/lib/visits/time";
+import { formatDateRange } from "@/lib/visits/time";
 import type { VisitListItem } from "@/lib/visits/types";
 import { RuleForm } from "./rule-form";
 
@@ -315,7 +315,7 @@ export function VisitMessagingModal({
           <Modal.CloseTrigger />
           <Modal.Header>
             <Modal.Heading>
-              Messages{visit ? ` — ${visit.visit_type}, ${formatDate(visit.visit_date)}` : ""}
+              Messages{visit ? ` — ${visit.visit_type}, ${formatDateRange(visit.visit_date, visit.end_date)}` : ""}
             </Modal.Heading>
           </Modal.Header>
           <Modal.Body>

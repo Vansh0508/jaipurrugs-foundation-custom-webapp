@@ -12,16 +12,30 @@ export const VISIT_STATUSES = [
 export type VisitStatus = (typeof VISIT_STATUSES)[number]["id"];
 export type VisitStatusColor = (typeof VISIT_STATUSES)[number]["color"];
 
+/**
+ * The program a visit belongs to. Its label is also stored as the visit's
+ * `visit_type`, which is what message sequences are matched on.
+ */
 export const PROGRAM_CATEGORIES = [
   { id: "rural_experience", label: "Rural Experience" },
-  { id: "other", label: "Other" },
+  { id: "industrial_visit", label: "Industrial Visit" },
+  { id: "village_field_visit", label: "Village / Field Visit" },
 ] as const;
 
+export type ProgramCategory = (typeof PROGRAM_CATEGORIES)[number]["id"];
+
 export const VISITOR_CATEGORIES = [
+  { id: "buyer", label: "Buyers" },
+  { id: "partner", label: "Partners" },
+  { id: "collaborator", label: "Collaborators" },
+  { id: "student", label: "Students" },
+  { id: "entrepreneur", label: "Entrepreneurs" },
+  { id: "designer", label: "Designers" },
+  { id: "architect", label: "Architects" },
+  { id: "tourist", label: "Tourists" },
+  { id: "corporate", label: "Corporate group" },
   { id: "individual", label: "Individual" },
   { id: "group", label: "Group" },
-  { id: "corporate", label: "Corporate" },
-  { id: "student", label: "Student" },
   { id: "tour_agency", label: "Tour agency" },
 ] as const;
 
@@ -41,23 +55,34 @@ export const GUEST_STATUSES = [
 
 export type GuestStatus = (typeof GUEST_STATUSES)[number]["id"];
 
-/** Suggestions only — visit type is free text. */
-export const SUGGESTED_VISIT_TYPES = [
-  "Rural Experience",
-  "Field Visit",
-  "Industrial Visit",
-  "Corporate Visit",
-  "Student Visit",
-  "Client Visit",
-  "Media Visit",
-  "VIP Visit",
-];
+/** Dialling codes offered next to the coordinator's phone number. */
+export const COUNTRY_CODES = [
+  { id: "+91", label: "India" },
+  { id: "+1", label: "US / Canada" },
+  { id: "+44", label: "UK" },
+  { id: "+971", label: "UAE" },
+  { id: "+61", label: "Australia" },
+  { id: "+49", label: "Germany" },
+  { id: "+33", label: "France" },
+  { id: "+39", label: "Italy" },
+  { id: "+34", label: "Spain" },
+  { id: "+31", label: "Netherlands" },
+  { id: "+41", label: "Switzerland" },
+  { id: "+65", label: "Singapore" },
+  { id: "+81", label: "Japan" },
+  { id: "+977", label: "Nepal" },
+  { id: "+94", label: "Sri Lanka" },
+  { id: "+880", label: "Bangladesh" },
+] as const;
+
+export const DEFAULT_COUNTRY_CODE = "+91";
 
 function labelOf(list: readonly { id: string; label: string }[], id: string | null | undefined) {
   return list.find((item) => item.id === id)?.label ?? id ?? "";
 }
 
 export const visitStatusLabel = (id: string) => labelOf(VISIT_STATUSES, id);
+export const programLabel = (id: string) => labelOf(PROGRAM_CATEGORIES, id);
 export const visitorCategoryLabel = (id: string | null) => labelOf(VISITOR_CATEGORIES, id);
 export const bookingChannelLabel = (id: string | null) => labelOf(BOOKING_CHANNELS, id);
 export const guestStatusLabel = (id: string) => labelOf(GUEST_STATUSES, id);

@@ -5,9 +5,9 @@ import { requireActiveTeamMember } from "@/lib/auth/session";
 import { applyRuleSetToVisit } from "@/lib/actions/messaging";
 import { normalizePhone } from "@/lib/mastra/phone";
 import { createClient } from "@/lib/supabase/server";
-import { VISIT_STATUSES } from "@/lib/visits/constants";
+import { VISIT_STATUSES, programLabel } from "@/lib/visits/constants";
 import { blankToNull, guestSchema, guestStatusSchema, visitSchema, type VisitInput } from "@/lib/visits/schemas";
-import type { LeadSearchResult, VisitGuestItem } from "@/lib/visits/types";
+import type { LeadSearchResult, VisitGuestItem, VisitListItem } from "@/lib/visits/types";
 
 export type VisitActionResult = { error?: string };
 
@@ -19,10 +19,14 @@ function revalidateVisits() {
   revalidatePath("/dashboard");
 }
 
+// visitor_group is a legacy column (the visitor category replaced it), so it is
+// left untouched here rather than cleared on every save.
 function visitRow(data: ReturnType<typeof visitSchema.parse>) {
   return {
-    visit_type: data.visitType,
+    // The program's label doubles as the visit type that message sequences match on.
+    visit_type: programLabel(data.programCategory),
     visit_date: data.visitDate,
+    end_date: data.endDate && data.endDate !== data.visitDate ? data.endDate : null,
     start_time: data.startTime,
     end_time: data.endTime,
     status: data.status,
@@ -31,7 +35,6 @@ function visitRow(data: ReturnType<typeof visitSchema.parse>) {
     facilitator: blankToNull(data.facilitator),
     partner_id: data.partnerId,
     headcount: data.headcount,
-    visitor_group: blankToNull(data.visitorGroup),
     source: blankToNull(data.source),
     origin_place: blankToNull(data.originPlace),
     program_category: data.programCategory,
@@ -98,7 +101,8 @@ async function syncVisitLinks(
   return null;
 }
 
-export async function createVisit(input: VisitInput): Promise<VisitActionResult & { id?: string }> {
+/** Returns the created visit so the caller can go straight on to its guest list. */
+export async function createVisit(input: VisitInput): Promise<VisitActionResult & { visit?: VisitListItem }> {
   const { email } = await requireActiveTeamMember();
   const parsed = visitSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid visit." };
@@ -111,7 +115,7 @@ export async function createVisit(input: VisitInput): Promise<VisitActionResult 
       created_by: email,
       completed_by: parsed.data.status === "completed" ? `staff:${email}` : null,
     })
-    .select("id")
+    .select("*")
     .single();
   if (error || !created) return { error: "Could not create the visit." };
 
@@ -121,22 +125,34 @@ export async function createVisit(input: VisitInput): Promise<VisitActionResult 
     return { error: linkError };
   }
 
-  // Sequences set up for this visit type (e.g. "Rural Experience") are applied automatically.
+  // Sequences set up for this visit's program (e.g. "Rural Experience") are applied automatically.
   // Best-effort: the visit is already saved, and rules can be added from its Messaging dialog.
   const { data: sequences } = await supabase
     .from("message_rule_sets")
     .select("id, visit_type")
     .eq("is_active", true)
     .not("visit_type", "is", null);
-  const typeKey = parsed.data.visitType.trim().toLowerCase();
+  const typeKey = created.visit_type.trim().toLowerCase();
   for (const sequence of sequences ?? []) {
     if (sequence.visit_type?.trim().toLowerCase() === typeKey) {
       await applyRuleSetToVisit(created.id, sequence.id);
     }
   }
 
+  const { data: linkedExperiences } = await supabase
+    .from("visit_experiences")
+    .select("experience_id")
+    .eq("visit_id", created.id);
+
   revalidateVisits();
-  return { id: created.id };
+  return {
+    visit: {
+      ...created,
+      villageIds: [...new Set(parsed.data.villageIds)],
+      experienceIds: (linkedExperiences ?? []).map((r) => r.experience_id),
+      guestCount: 0,
+    },
+  };
 }
 
 export async function updateVisit(id: string, input: VisitInput): Promise<VisitActionResult> {
