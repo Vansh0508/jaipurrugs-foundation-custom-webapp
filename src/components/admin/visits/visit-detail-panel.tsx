@@ -64,6 +64,25 @@ function VisitDetails({
       <Section
         title="Visitors"
         rows={[
+          {
+            label: "Primary POC",
+            value: visit.primaryGuest ? (
+              <>
+                {visit.primaryGuest.name ?? "Unnamed contact"}
+                <a
+                  className="block text-accent hover:underline"
+                  href={`tel:${visit.primaryGuest.phone.replace(/\s+/g, "")}`}
+                >
+                  {formatPhone(visit.primaryGuest.phone)}
+                </a>
+                {visit.primaryGuest.email ? (
+                  <a className="block text-accent hover:underline" href={`mailto:${visit.primaryGuest.email}`}>
+                    {visit.primaryGuest.email}
+                  </a>
+                ) : null}
+              </>
+            ) : null,
+          },
           { label: "Category", value: visit.visitor_category ? visitorCategoryLabel(visit.visitor_category) : visit.visitor_group },
           { label: "Headcount", value: visit.headcount !== null ? `${visit.headcount} people` : null },
           { label: "Coming from", value: visit.origin_place },

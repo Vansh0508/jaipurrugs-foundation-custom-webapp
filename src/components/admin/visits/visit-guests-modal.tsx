@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Comment, Copy, Plus, TrashBin, Xmark } from "@gravity-ui/icons";
+import { Comment, Copy, Plus, Star, StarFill, TrashBin, Xmark } from "@gravity-ui/icons";
 import {
   Button,
   Chip,
@@ -25,6 +25,7 @@ import {
   removeGuest,
   searchLeadsForVisit,
   setGuestStatus,
+  setPrimaryGuest,
 } from "@/lib/actions/visits";
 import { formatPhone } from "@/lib/mastra/phone";
 import { DEFAULT_COUNTRY_CODE, GUEST_STATUSES } from "@/lib/visits/constants";
@@ -78,6 +79,7 @@ function AddGuestPanel({
   const [name, setName] = useState("");
   const [phoneCode, setPhoneCode] = useState(DEFAULT_COUNTRY_CODE);
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [email, setEmail] = useState("");
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Remounted after each add so focus returns to an empty name field for the next guest.
@@ -107,7 +109,7 @@ function AddGuestPanel({
     e.preventDefault();
     setIsAdding(true);
     setError(null);
-    const result = await addNewGuest(visit.id, { name, phone: joinPhone(phoneCode, phoneNumber) });
+    const result = await addNewGuest(visit.id, { name, phone: joinPhone(phoneCode, phoneNumber), email });
     setIsAdding(false);
     if (result.error) {
       setError(result.error);
@@ -116,6 +118,7 @@ function AddGuestPanel({
     toast.success(`${name.trim()} added`);
     setName("");
     setPhoneNumber("");
+    setEmail("");
     setFormKey((k) => k + 1);
     await onAdded();
   }
@@ -168,10 +171,17 @@ function AddGuestPanel({
                 onCodeChange={setPhoneCode}
                 onNumberChange={setPhoneNumber}
               />
+              <TextField className="sm:col-span-2" type="email" value={email} onChange={setEmail}>
+                <Label>Email (optional)</Label>
+                <Input placeholder="name@example.com" />
+              </TextField>
             </div>
             {error ? <p className="text-sm text-danger">{error}</p> : null}
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs text-muted">If this number is already in Leads, that contact is reused.</p>
+              <p className="text-xs text-muted">
+                If this number is already in Leads, that contact is reused. The first guest added becomes the primary
+                POC.
+              </p>
               <Button isPending={isAdding} type="submit">
                 <Plus className="size-4" />
                 Add guest
@@ -304,7 +314,7 @@ function GuestsBody({
               <Table.Column>WhatsApp</Table.Column>
               <Table.Column className="w-40">Status</Table.Column>
               <Table.Column>Chat</Table.Column>
-              <Table.Column className="w-24 text-right">
+              <Table.Column className="w-32 text-right">
                 <span className="sr-only">Actions</span>
               </Table.Column>
             </Table.Header>
@@ -332,8 +342,13 @@ function GuestsBody({
                   <Table.Cell>
                     <span className="block font-medium">{guest.name ?? "Unnamed contact"}</span>
                     {guest.email ? <span className="block text-xs text-muted">{guest.email}</span> : null}
-                    {guest.optedOut || guest.needsHuman ? (
+                    {guest.isPrimary || guest.optedOut || guest.needsHuman ? (
                       <span className="mt-1 flex flex-wrap gap-1">
+                        {guest.isPrimary ? (
+                          <Chip color="accent" size="sm" variant="soft">
+                            Primary POC
+                          </Chip>
+                        ) : null}
                         {guest.optedOut ? (
                           <Chip color="danger" size="sm" variant="soft">
                             Opted out
@@ -386,7 +401,25 @@ function GuestsBody({
                       <span className="text-xs text-muted">No chat yet</span>
                     )}
                   </Table.Cell>
-                  <Table.Cell className="text-right">
+                  <Table.Cell className="whitespace-nowrap text-right">
+                    <Button
+                      isIconOnly
+                      aria-label={
+                        guest.isPrimary
+                          ? `${guest.name ?? guest.phone} is the primary POC`
+                          : `Make ${guest.name ?? guest.phone} the primary POC`
+                      }
+                      isDisabled={guest.isPrimary}
+                      size="sm"
+                      variant="ghost"
+                      onPress={async () => {
+                        if (await afterChange(await setPrimaryGuest(visit.id, guest.id))) {
+                          toast.success(`${guest.name ?? "Contact"} is now the primary POC`);
+                        }
+                      }}
+                    >
+                      {guest.isPrimary ? <StarFill className="size-4 text-accent" /> : <Star className="size-4" />}
+                    </Button>
                     {visit.feedback_form_id ? (
                       <Button
                         isIconOnly

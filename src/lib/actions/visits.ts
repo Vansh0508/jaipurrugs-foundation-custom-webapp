@@ -5,6 +5,7 @@ import { requireActiveTeamMember } from "@/lib/auth/session";
 import { applyRuleSetToVisit } from "@/lib/actions/messaging";
 import { normalizePhone } from "@/lib/mastra/phone";
 import { createClient } from "@/lib/supabase/server";
+import type { Json } from "@/lib/types/supabase";
 import { VISIT_DETAIL_VIEWS, VISIT_STATUSES, programLabel, type VisitDetailView } from "@/lib/visits/constants";
 import { blankToNull, guestSchema, guestStatusSchema, visitSchema, type VisitInput } from "@/lib/visits/schemas";
 import type { LeadSearchResult, VisitGuestItem, VisitListItem } from "@/lib/visits/types";
@@ -151,7 +152,7 @@ export async function createVisit(input: VisitInput): Promise<VisitActionResult 
       villageIds: [...new Set(parsed.data.villageIds)],
       experienceIds: (linkedExperiences ?? []).map((r) => r.experience_id),
       guestCount: 0,
-      guests: [],
+      primaryGuest: null,
     },
   };
 }
@@ -226,7 +227,7 @@ export async function getVisitGuests(visitId: string): Promise<VisitGuestItem[]>
 
   const { data: rows } = await supabase
     .from("visit_guests")
-    .select("id, lead_id, status, feedback_token, created_at, leads(id, name, phone, attributes, whatsapp_opt_out)")
+    .select("id, lead_id, status, is_primary, feedback_token, created_at, leads(id, name, phone, attributes, whatsapp_opt_out)")
     .eq("visit_id", visitId)
     .order("created_at");
   if (!rows || rows.length === 0) return [];
@@ -253,6 +254,7 @@ export async function getVisitGuests(visitId: string): Promise<VisitGuestItem[]>
       id: row.id,
       leadId: row.lead_id,
       status: row.status,
+      isPrimary: row.is_primary,
       name: lead?.name ?? null,
       phone: lead?.phone ?? "",
       email: typeof attributes.email === "string" ? attributes.email : null,
@@ -286,19 +288,44 @@ export async function searchLeadsForVisit(visitId: string, query: string): Promi
   return (data ?? []).filter((lead) => !exclude.has(lead.id)).slice(0, 8);
 }
 
-export async function addGuestFromLead(visitId: string, leadId: string): Promise<VisitActionResult> {
-  const { email } = await requireActiveTeamMember();
-  const supabase = await createClient();
-  const { error } = await supabase.from("visit_guests").insert({ visit_id: visitId, lead_id: leadId, created_by: email });
+/** The first guest added to a visit becomes its primary POC; staff can change it after. */
+async function insertGuest(
+  supabase: SupabaseServerClient,
+  visitId: string,
+  leadId: string,
+  createdBy: string,
+): Promise<VisitActionResult> {
+  const { count } = await supabase
+    .from("visit_guests")
+    .select("id", { count: "exact", head: true })
+    .eq("visit_id", visitId)
+    .eq("is_primary", true);
+  const { error } = await supabase
+    .from("visit_guests")
+    .insert({ visit_id: visitId, lead_id: leadId, created_by: createdBy, is_primary: count === 0 });
   if (error) {
     return { error: error.code === "23505" ? "That person is already on this visit." : "Could not add the guest." };
   }
+  return {};
+}
+
+export async function addGuestFromLead(visitId: string, leadId: string): Promise<VisitActionResult> {
+  const { email } = await requireActiveTeamMember();
+  const supabase = await createClient();
+  const result = await insertGuest(supabase, visitId, leadId, email);
+  if (result.error) return result;
   revalidateVisits();
   return {};
 }
 
-/** Adds a guest by phone: reuses the lead if that number exists, otherwise creates one. */
-export async function addNewGuest(visitId: string, input: { name: string; phone: string }): Promise<VisitActionResult> {
+/**
+ * Adds a guest by phone: reuses the lead if that number exists, otherwise creates one.
+ * An email, when given, is saved to the lead's `email` attribute.
+ */
+export async function addNewGuest(
+  visitId: string,
+  input: { name: string; phone: string; email?: string },
+): Promise<VisitActionResult> {
   const { email } = await requireActiveTeamMember();
   const parsed = guestSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid guest." };
@@ -307,28 +334,37 @@ export async function addNewGuest(visitId: string, input: { name: string; phone:
   if (!normalized) return { error: "Enter a valid phone number (at least 8 digits)." };
 
   const supabase = await createClient();
+  const guestEmail = blankToNull(parsed.data.email);
+
   let { data: lead } = await supabase
     .from("leads")
-    .select("id, name")
+    .select("id, name, attributes")
     .eq("phone_normalized", normalized)
     .maybeSingle();
 
   if (!lead) {
     const { data: created, error } = await supabase
       .from("leads")
-      .insert({ phone: parsed.data.phone, name: parsed.data.name, source: "manual" })
-      .select("id, name")
+      .insert({
+        phone: parsed.data.phone,
+        name: parsed.data.name,
+        source: "manual",
+        attributes: guestEmail ? { email: guestEmail } : {},
+      })
+      .select("id, name, attributes")
       .single();
     if (error || !created) return { error: "Could not create the contact." };
     lead = created;
-  } else if (!lead.name) {
-    await supabase.from("leads").update({ name: parsed.data.name }).eq("id", lead.id);
+  } else {
+    const attributes = (lead.attributes ?? {}) as Record<string, Json>;
+    const update: { name?: string; attributes?: Record<string, Json> } = {};
+    if (!lead.name) update.name = parsed.data.name;
+    if (guestEmail && attributes.email !== guestEmail) update.attributes = { ...attributes, email: guestEmail };
+    if (update.name || update.attributes) await supabase.from("leads").update(update).eq("id", lead.id);
   }
 
-  const { error } = await supabase.from("visit_guests").insert({ visit_id: visitId, lead_id: lead.id, created_by: email });
-  if (error) {
-    return { error: error.code === "23505" ? "That person is already on this visit." : "Could not add the guest." };
-  }
+  const result = await insertGuest(supabase, visitId, lead.id, email);
+  if (result.error) return result;
   revalidateVisits();
   revalidatePath("/leads");
   return {};
@@ -342,6 +378,29 @@ export async function setGuestStatus(guestId: string, status: string): Promise<V
   const supabase = await createClient();
   const { error } = await supabase.from("visit_guests").update({ status: parsed.data }).eq("id", guestId);
   if (error) return { error: "Could not update the guest." };
+  revalidateVisits();
+  return {};
+}
+
+/** Makes this guest the visit's primary POC (only one per visit). */
+export async function setPrimaryGuest(visitId: string, guestId: string): Promise<VisitActionResult> {
+  await requireActiveTeamMember();
+  const supabase = await createClient();
+  // Clear the current one first: a partial unique index allows one primary guest per visit.
+  const { error: clearError } = await supabase
+    .from("visit_guests")
+    .update({ is_primary: false })
+    .eq("visit_id", visitId)
+    .eq("is_primary", true)
+    .neq("id", guestId);
+  if (clearError) return { error: "Could not change the primary POC." };
+  const { data, error } = await supabase
+    .from("visit_guests")
+    .update({ is_primary: true })
+    .eq("id", guestId)
+    .eq("visit_id", visitId)
+    .select("id");
+  if (error || !data?.length) return { error: "Could not change the primary POC." };
   revalidateVisits();
   return {};
 }

@@ -990,6 +990,7 @@ export type Database = {
           created_by: string | null
           feedback_token: string
           id: string
+          is_primary: boolean
           lead_id: string
           status: string
           updated_at: string
@@ -1000,6 +1001,7 @@ export type Database = {
           created_by?: string | null
           feedback_token?: string
           id?: string
+          is_primary?: boolean
           lead_id: string
           status?: string
           updated_at?: string
@@ -1010,6 +1012,7 @@ export type Database = {
           created_by?: string | null
           feedback_token?: string
           id?: string
+          is_primary?: boolean
           lead_id?: string
           status?: string
           updated_at?: string
@@ -1523,8 +1526,28 @@ export type Database = {
           zernio_conversation_id: string | null
         }[]
       }
-      dashboard_feedback_stats: { Args: { p_from: string; p_to: string }; Returns: Json }
-      dashboard_stats: { Args: { p_from: string; p_to: string }; Returns: Json }
+      dashboard_feedback_stats: {
+        Args: {
+          p_booking_channel?: string
+          p_from: string
+          p_program?: string
+          p_to: string
+          p_village_id?: string
+          p_visitor_category?: string
+        }
+        Returns: Json
+      }
+      dashboard_stats: {
+        Args: {
+          p_booking_channel?: string
+          p_from: string
+          p_program?: string
+          p_to: string
+          p_village_id?: string
+          p_visitor_category?: string
+        }
+        Returns: Json
+      }
       feedback_save: { Args: { p_answers: Json; p_complete?: boolean; p_token: string }; Returns: Json }
       feedback_session: { Args: { p_token: string }; Returns: Json }
       hook_restrict_signup_to_active_team_members: {

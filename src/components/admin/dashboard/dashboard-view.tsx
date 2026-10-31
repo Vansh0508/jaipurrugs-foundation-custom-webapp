@@ -1,16 +1,17 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { bookingChannelLabel, visitorCategoryLabel } from "@/lib/visits/constants";
+import { bookingChannelLabel, programLabel, visitorCategoryLabel } from "@/lib/visits/constants";
 import {
-  DASHBOARD_RANGES,
+  ALL_PROGRAMS,
   formatInr,
-  type DashboardRangeId,
+  type DashboardFilters as Filters,
   type DashboardStats,
   type LabelValue,
 } from "@/lib/visits/dashboard";
 import { formatDate } from "@/lib/visits/time";
 import { StatCard } from "../visits/stat-card";
 import { IncomeBarChart, MonthlyAreaChart, RankedBarChart } from "./charts";
+import { DashboardFilters } from "./dashboard-filters";
 
 function Section({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
   return (
@@ -54,49 +55,33 @@ function relabel(items: LabelValue[], labelFor: (id: string) => string): LabelVa
 
 export function DashboardView({
   stats,
-  rangeId,
-  rangeLabel,
-  from,
-  to,
+  filters,
+  villages,
 }: {
   stats: DashboardStats;
-  rangeId: DashboardRangeId;
-  rangeLabel: string;
-  from: string;
-  to: string;
+  filters: Filters;
+  villages: { id: string; name: string }[];
 }) {
   const { operations, reach, economic, innovation } = stats;
+  const programName = filters.program === ALL_PROGRAMS ? "" : `${programLabel(filters.program)} `;
   const hasAnyData = reach.visits > 0 || operations.upcoming_visits > 0 || operations.completed_in_range > 0;
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex flex-col gap-4">
         <div>
           <h1 className="text-xl font-semibold">Dashboard</h1>
           <p className="text-sm text-muted">
-            {rangeLabel}: {formatDate(from)} – {formatDate(to)}. Reach and income count completed Rural Experience
-            visits only.
+            {filters.rangeLabel}: {formatDate(filters.from)} – {formatDate(filters.to)}. Reach and income count
+            completed {programName}visits only.
           </p>
         </div>
-        <nav aria-label="Period" className="flex gap-1 rounded-xl bg-neutral-100 p-1">
-          {DASHBOARD_RANGES.map((range) => (
-            <Link
-              key={range.id}
-              aria-current={range.id === rangeId ? "page" : undefined}
-              className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
-                range.id === rangeId ? "bg-white font-medium shadow-sm" : "text-muted hover:text-foreground"
-              }`}
-              href={`/dashboard?range=${range.id}`}
-            >
-              {range.id.replace("m", " mo")}
-            </Link>
-          ))}
-        </nav>
+        <DashboardFilters filters={filters} villages={villages} />
       </div>
 
       {!hasAnyData ? (
         <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-muted">
-          No visits in this period yet. Add visits on <Link className="text-accent" href="/trips">Trips</Link> and mark
+          No visits match this period and these filters yet. Add visits on <Link className="text-accent" href="/trips">Trips</Link> and mark
           them completed — reach, income and guest numbers appear here as soon as they are.
         </div>
       ) : null}

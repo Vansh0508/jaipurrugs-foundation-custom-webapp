@@ -168,6 +168,11 @@ export type VisitInput = z.input<typeof visitSchema>;
 export const guestSchema = z.object({
   name: z.string().trim().min(1, "Name is required.").max(120),
   phone: z.string().trim().min(1, "Phone number is required.").max(30),
+  // Optional; "" means not given.
+  email: z.preprocess(
+    (v) => (typeof v === "string" ? v.trim() : v),
+    z.union([z.literal(""), z.email("Enter a valid email address.").max(254)]).optional(),
+  ),
 });
 
 export const guestStatusSchema = z.enum(ids(GUEST_STATUSES));

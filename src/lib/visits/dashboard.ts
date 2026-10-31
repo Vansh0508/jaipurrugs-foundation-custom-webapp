@@ -1,7 +1,9 @@
+import { BOOKING_CHANNELS, PROGRAM_CATEGORIES, VISITOR_CATEGORIES } from "./constants";
 import { shiftMonth, todayIST } from "./time";
 
-// Shapes returned by public.dashboard_stats(p_from, p_to) — see
-// supabase/migrations/20261005130000_dashboard_stats.sql for what each number means.
+// Shapes returned by public.dashboard_stats(p_from, p_to, ...filters) — see
+// supabase/migrations/20261005130000_dashboard_stats.sql for what each number means and
+// supabase/migrations/20261030100000_primary_guest_dashboard_filters.sql for the filters.
 
 export type LabelValue = { label: string; value: number };
 
@@ -97,19 +99,89 @@ export const DASHBOARD_RANGES = [
   { id: "24m", label: "Last 24 months", months: 24 },
 ] as const;
 
-export type DashboardRangeId = (typeof DASHBOARD_RANGES)[number]["id"];
+export type DashboardRangeId = (typeof DASHBOARD_RANGES)[number]["id"] | "custom";
 
-export const DEFAULT_DASHBOARD_RANGE: DashboardRangeId = "12m";
+export const DEFAULT_DASHBOARD_RANGE = "12m";
 
-/** The inclusive date window for a range id: from the first day of the earliest month to today (IST). */
-export function resolveDashboardRange(id: string | undefined | null, today: string = todayIST()) {
-  const range = DASHBOARD_RANGES.find((r) => r.id === id) ?? DASHBOARD_RANGES.find((r) => r.id === DEFAULT_DASHBOARD_RANGE)!;
-  const currentMonth = today.slice(0, 7);
+/** "all" counts every program; the default keeps the impact numbers to Rural Experience. */
+export const ALL_PROGRAMS = "all";
+export const DEFAULT_DASHBOARD_PROGRAM = "rural_experience";
+
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// dashboard_stats() refuses anything longer than this.
+const MAX_RANGE_DAYS = 366 * 6;
+
+export type DashboardSearchParams = {
+  range?: string;
+  from?: string;
+  to?: string;
+  program?: string;
+  category?: string;
+  channel?: string;
+  village?: string;
+};
+
+export type DashboardFilters = {
+  rangeId: DashboardRangeId;
+  rangeLabel: string;
+  from: string;
+  to: string;
+  /** A program id, or ALL_PROGRAMS. */
+  program: string;
+  visitorCategory: string | null;
+  bookingChannel: string | null;
+  villageId: string | null;
+};
+
+function isValidDate(value: string | undefined): value is string {
+  return Boolean(value && DATE_PATTERN.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`)));
+}
+
+function daysApart(from: string, to: string) {
+  return (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000;
+}
+
+const pick = (value: string | undefined, ids: readonly string[]) => (value && ids.includes(value) ? value : null);
+
+/**
+ * The dashboard's period and filters from the URL. A valid ?from=&to= pair is a custom
+ * range; otherwise a preset (from the first day of the earliest month to today, IST).
+ */
+export function resolveDashboardFilters(params: DashboardSearchParams, today: string = todayIST()): DashboardFilters {
+  let period: Pick<DashboardFilters, "rangeId" | "rangeLabel" | "from" | "to">;
+  const { from, to } = params;
+  if (isValidDate(from) && isValidDate(to) && from <= to && daysApart(from, to) <= MAX_RANGE_DAYS) {
+    period = { rangeId: "custom", rangeLabel: "Custom range", from, to };
+  } else {
+    const range =
+      DASHBOARD_RANGES.find((r) => r.id === params.range) ?? DASHBOARD_RANGES.find((r) => r.id === DEFAULT_DASHBOARD_RANGE)!;
+    period = {
+      rangeId: range.id,
+      rangeLabel: range.label,
+      from: `${shiftMonth(today.slice(0, 7), -(range.months - 1))}-01`,
+      to: today,
+    };
+  }
+
   return {
-    id: range.id,
-    label: range.label,
-    from: `${shiftMonth(currentMonth, -(range.months - 1))}-01`,
-    to: today,
+    ...period,
+    program: pick(params.program, [ALL_PROGRAMS, ...PROGRAM_CATEGORIES.map((p) => p.id)]) ?? DEFAULT_DASHBOARD_PROGRAM,
+    visitorCategory: pick(params.category, VISITOR_CATEGORIES.map((c) => c.id)),
+    bookingChannel: pick(params.channel, BOOKING_CHANNELS.map((c) => c.id)),
+    villageId: params.village && UUID_PATTERN.test(params.village) ? params.village : null,
+  };
+}
+
+/** The RPC arguments shared by dashboard_stats() and dashboard_feedback_stats(). */
+export function dashboardRpcArgs(filters: DashboardFilters) {
+  return {
+    p_from: filters.from,
+    p_to: filters.to,
+    p_program: filters.program,
+    ...(filters.visitorCategory ? { p_visitor_category: filters.visitorCategory } : {}),
+    ...(filters.bookingChannel ? { p_booking_channel: filters.bookingChannel } : {}),
+    ...(filters.villageId ? { p_village_id: filters.villageId } : {}),
   };
 }
 

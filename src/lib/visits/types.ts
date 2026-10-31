@@ -7,15 +7,15 @@ export type VisitListItem = VisitRow & {
   villageIds: string[];
   experienceIds: string[];
   guestCount: number;
-  /** Shown nested under the visit in the trips grid. */
-  guests: VisitGuestSummary[];
+  /** The guest marked as the visit's primary point of contact, shown in the trips grid. */
+  primaryGuest: VisitPrimaryGuest | null;
 };
 
-export type VisitGuestSummary = {
+export type VisitPrimaryGuest = {
   id: string;
   name: string | null;
   phone: string;
-  status: string;
+  email: string | null;
 };
 
 export type VillageOption = Pick<Tables<"villages">, "id" | "name" | "is_active">;
@@ -36,6 +36,7 @@ export type VisitGuestItem = {
   id: string;
   leadId: string;
   status: string;
+  isPrimary: boolean;
   name: string | null;
   phone: string;
   email: string | null;

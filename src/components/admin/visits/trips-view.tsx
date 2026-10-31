@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Calendar,
-  ChevronRight,
   Ellipsis,
   Envelope,
   LayoutCells,
@@ -20,14 +19,11 @@ import {
   DateRangePicker,
   Dropdown,
   Label,
-  ListBox,
   RangeCalendar,
   SearchField,
-  Select,
   Table,
   Tabs,
   toast,
-  type Selection,
 } from "@heroui/react";
 import type { CalendarDate } from "@internationalized/date";
 import { setVisitDetailView, setVisitStatus } from "@/lib/actions/visits";
@@ -36,7 +32,6 @@ import {
   PROGRAM_CATEGORIES,
   VISIT_STATUSES,
   bookingChannelLabel,
-  guestStatusLabel,
   visitStatusLabel,
   visitorCategoryLabel,
   type VisitDetailView,
@@ -45,6 +40,7 @@ import { formatDateRange, formatTimeRange } from "@/lib/visits/time";
 import type { VisitListItem, VisitReference } from "@/lib/visits/types";
 import { VisitMessagingModal, useVisitMessaging } from "../messaging/visit-messaging-modal";
 import { VisitsCalendar } from "./calendar-view";
+import { ALL, FilterSelect } from "./filter-select";
 import { VisitDetailPanel } from "./visit-detail-panel";
 import { VisitFormModal } from "./visit-form-modal";
 import { VisitGuestsModal, useVisitGuests } from "./visit-guests-modal";
@@ -52,47 +48,8 @@ import { VisitStatusChip } from "./visit-status-chip";
 
 export type TripsViewMode = "calendar" | "grid";
 
-const ALL = "__all";
 
 type DateRange = { start: CalendarDate; end: CalendarDate };
-
-function FilterSelect({
-  label,
-  value,
-  onChange,
-  allLabel,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  allLabel: string;
-  options: readonly { id: string; label: string }[];
-}) {
-  return (
-    <Select className="w-44" value={value} onChange={(key) => onChange(String(key ?? ALL))}>
-      <Label>{label}</Label>
-      <Select.Trigger>
-        <Select.Value />
-        <Select.Indicator />
-      </Select.Trigger>
-      <Select.Popover>
-        <ListBox>
-          <ListBox.Item id={ALL} textValue={allLabel}>
-            {allLabel}
-            <ListBox.ItemIndicator />
-          </ListBox.Item>
-          {options.map((o) => (
-            <ListBox.Item key={o.id} id={o.id} textValue={o.label}>
-              {o.label}
-              <ListBox.ItemIndicator />
-            </ListBox.Item>
-          ))}
-        </ListBox>
-      </Select.Popover>
-    </Select>
-  );
-}
 
 function DateRangeFilter({ value, onChange }: { value: DateRange | null; onChange: (value: DateRange | null) => void }) {
   return (
@@ -141,8 +98,6 @@ function DateRangeFilter({ value, onChange }: { value: DateRange | null; onChang
     </div>
   );
 }
-
-const GUEST_ROW_PREFIX = "guest:";
 
 function VisitActionsMenu({
   visit,
@@ -242,8 +197,6 @@ export function TripsView({
   const [detailId, setDetailId] = useState<string | null>(initialVisitId);
   const [isDetailOpen, setIsDetailOpen] = useState(initialVisitId !== null);
   const [detailView, setDetailView] = useState<VisitDetailView>(initialDetailView);
-  // Guests are shown nested under every visit; this tracks the ones folded away.
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [editing, setEditing] = useState<VisitListItem | null>(null);
   const [formDate, setFormDate] = useState(today);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -272,6 +225,9 @@ export function TripsView({
         v.visit_type,
         v.poc_name ?? "",
         v.poc_phone ?? "",
+        v.primaryGuest?.name ?? "",
+        v.primaryGuest?.phone ?? "",
+        v.primaryGuest?.email ?? "",
         v.facilitator ?? "",
         v.visitor_category ? visitorCategoryLabel(v.visitor_category) : "",
         v.visitor_group ?? "",
@@ -282,16 +238,6 @@ export function TripsView({
       ].some((s) => s.toLowerCase().includes(q));
     });
   }, [visits, status, program, villageId, dateRange, query, villageName]);
-
-  const expandedKeys = useMemo(
-    () => new Set(filtered.filter((v) => v.guests.length > 0 && !collapsed.has(v.id)).map((v) => v.id)),
-    [filtered, collapsed],
-  );
-
-  function handleExpandedChange(keys: Selection) {
-    const expanded = keys === "all" ? null : keys;
-    setCollapsed(new Set(filtered.filter((v) => expanded && !expanded.has(v.id)).map((v) => v.id)));
-  }
 
   const filtersActive = query !== "" || status !== ALL || program !== ALL || villageId !== ALL || dateRange !== null;
 
@@ -326,12 +272,8 @@ export function TripsView({
     setIsFormOpen(true);
   }
 
-  /** A guest row opens the details of the visit it belongs to. */
   function handleRowAction(key: React.Key) {
-    const id = String(key);
-    const visit = id.startsWith(GUEST_ROW_PREFIX)
-      ? visits.find((v) => v.guests.some((g) => `${GUEST_ROW_PREFIX}${g.id}` === id))
-      : visits.find((v) => v.id === id);
+    const visit = visits.find((v) => v.id === String(key));
     if (visit) openDetail(visit);
   }
 
@@ -382,7 +324,7 @@ export function TripsView({
           <Label>Search</Label>
           <SearchField.Group>
             <SearchField.SearchIcon />
-            <SearchField.Input placeholder="Coordinator, place, village…" />
+            <SearchField.Input placeholder="POC, coordinator, place, village…" />
             <SearchField.ClearButton />
           </SearchField.Group>
         </SearchField>
@@ -443,21 +385,16 @@ export function TripsView({
             <Table.Content
               aria-label="Visits"
               className="w-full min-w-[980px]"
-              expandedKeys={expandedKeys}
-              treeColumn="date"
-              onExpandedChange={handleExpandedChange}
               onRowAction={handleRowAction}
             >
               <Table.Header>
-                <Table.Column isRowHeader id="date">
-                  Date
-                </Table.Column>
+                <Table.Column isRowHeader>Date</Table.Column>
                 <Table.Column>Visit</Table.Column>
+                <Table.Column>Primary POC</Table.Column>
                 <Table.Column>Coordinator</Table.Column>
                 <Table.Column>Group</Table.Column>
                 <Table.Column>Headcount</Table.Column>
                 <Table.Column>Villages</Table.Column>
-                <Table.Column>Guests</Table.Column>
                 <Table.Column>Status</Table.Column>
                 <Table.Column className="w-14 text-right">
                   <span className="sr-only">Actions</span>
@@ -472,38 +409,30 @@ export function TripsView({
                     textValue={`${formatDateRange(visit.visit_date, visit.end_date)} ${visit.visit_type}`}
                   >
                     <Table.Cell className="whitespace-nowrap font-medium">
-                      {({ hasChildItems, isExpanded }) => (
-                        <span className="flex items-start gap-1">
-                          {hasChildItems ? (
-                            <Button
-                              isIconOnly
-                              aria-label={isExpanded ? "Hide guests" : "Show guests"}
-                              className="-ml-1"
-                              size="sm"
-                              slot="chevron"
-                              variant="ghost"
-                            >
-                              <ChevronRight
-                                className={`size-4 text-muted transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}
-                              />
-                            </Button>
-                          ) : (
-                            <span aria-hidden className="w-7 shrink-0" />
-                          )}
-                          <span>
-                            {formatDateRange(visit.visit_date, visit.end_date)}
-                            <span className="block text-xs font-normal text-muted">
-                              {formatTimeRange(visit.start_time, visit.end_time)}
-                            </span>
-                          </span>
-                        </span>
-                      )}
+                      {formatDateRange(visit.visit_date, visit.end_date)}
+                      <span className="block text-xs font-normal text-muted">
+                        {formatTimeRange(visit.start_time, visit.end_time)}
+                      </span>
                     </Table.Cell>
                     <Table.Cell>
                       {visit.visit_type}
                       {visit.booking_channel ? (
                         <span className="block text-xs text-muted">{bookingChannelLabel(visit.booking_channel)}</span>
                       ) : null}
+                    </Table.Cell>
+                    <Table.Cell>
+                      {visit.primaryGuest ? (
+                        <>
+                          <span className="block max-w-[200px] truncate">
+                            {visit.primaryGuest.name ?? "Unnamed contact"}
+                          </span>
+                          <span className="block whitespace-nowrap text-xs tabular-nums text-muted">
+                            {formatPhone(visit.primaryGuest.phone)}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
                     </Table.Cell>
                     <Table.Cell>{visit.poc_name ?? <span className="text-muted">—</span>}</Table.Cell>
                     <Table.Cell>
@@ -533,12 +462,6 @@ export function TripsView({
                       </div>
                     </Table.Cell>
                     <Table.Cell>
-                      <span className="inline-flex items-center gap-1.5 tabular-nums">
-                        <Persons className="size-4 text-muted" />
-                        {visit.guestCount}
-                      </span>
-                    </Table.Cell>
-                    <Table.Cell>
                       <VisitStatusChip status={visit.status} />
                     </Table.Cell>
                     <Table.Cell className="text-right">
@@ -550,31 +473,6 @@ export function TripsView({
                         onStatusChange={(next) => handleStatusChange(visit, next)}
                       />
                     </Table.Cell>
-                    <Table.Collection items={visit.guests}>
-                      {(guest) => (
-                        <Table.Row
-                          className="cursor-pointer bg-neutral-50/70"
-                          id={`${GUEST_ROW_PREFIX}${guest.id}`}
-                          textValue={guest.name ?? guest.phone}
-                        >
-                          <Table.Cell>
-                            <span className="block pl-8 text-sm">{guest.name ?? "Unnamed contact"}</span>
-                          </Table.Cell>
-                          <Table.Cell className="whitespace-nowrap text-sm tabular-nums text-muted">
-                            {formatPhone(guest.phone)}
-                          </Table.Cell>
-                          <Table.Cell>{null}</Table.Cell>
-                          <Table.Cell>{null}</Table.Cell>
-                          <Table.Cell>{null}</Table.Cell>
-                          <Table.Cell>{null}</Table.Cell>
-                          <Table.Cell>{null}</Table.Cell>
-                          <Table.Cell>
-                            <span className="text-xs text-muted">{guestStatusLabel(guest.status)}</span>
-                          </Table.Cell>
-                          <Table.Cell>{null}</Table.Cell>
-                        </Table.Row>
-                      )}
-                    </Table.Collection>
                   </Table.Row>
                 ))}
               </Table.Body>
