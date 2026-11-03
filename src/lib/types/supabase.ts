@@ -135,6 +135,39 @@ export type Database = {
           },
         ]
       }
+      facilitators: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          email: string
+          id: string
+          is_active: boolean
+          name: string
+          phone: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          email: string
+          id?: string
+          is_active?: boolean
+          name: string
+          phone: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          email?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          phone?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       form_answers: {
         Row: {
           created_at: string
@@ -641,6 +674,7 @@ export type Database = {
           id: string
           name: string
           offset_minutes: number
+          recipients: string
           rule_set_id: string
           template_language: string
           template_name: string
@@ -653,6 +687,7 @@ export type Database = {
           id?: string
           name: string
           offset_minutes?: number
+          recipients?: string
           rule_set_id: string
           template_language?: string
           template_name: string
@@ -665,6 +700,7 @@ export type Database = {
           id?: string
           name?: string
           offset_minutes?: number
+          recipients?: string
           rule_set_id?: string
           template_language?: string
           template_name?: string
@@ -1043,6 +1079,7 @@ export type Database = {
           id: string
           name: string
           offset_minutes: number
+          recipients: string
           source_item_id: string | null
           template_language: string
           template_name: string
@@ -1056,6 +1093,7 @@ export type Database = {
           id?: string
           name: string
           offset_minutes?: number
+          recipients?: string
           source_item_id?: string | null
           template_language?: string
           template_name: string
@@ -1069,6 +1107,7 @@ export type Database = {
           id?: string
           name?: string
           offset_minutes?: number
+          recipients?: string
           source_item_id?: string | null
           template_language?: string
           template_name?: string
@@ -1085,6 +1124,47 @@ export type Database = {
           },
           {
             foreignKeyName: "visit_message_rules_visit_id_fkey"
+            columns: ["visit_id"]
+            isOneToOne: false
+            referencedRelation: "visits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      visit_sales: {
+        Row: {
+          amount: number
+          channel: string
+          created_at: string
+          created_by: string | null
+          id: string
+          invoice_id: string
+          updated_at: string
+          visit_id: string
+        }
+        Insert: {
+          amount: number
+          channel: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          invoice_id: string
+          updated_at?: string
+          visit_id: string
+        }
+        Update: {
+          amount?: number
+          channel?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          invoice_id?: string
+          updated_at?: string
+          visit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visit_sales_visit_id_fkey"
             columns: ["visit_id"]
             isOneToOne: false
             referencedRelation: "visits"
@@ -1174,9 +1254,11 @@ export type Database = {
           end_date: string | null
           end_time: string | null
           facilitator: string | null
+          facilitator_id: string | null
           feedback_form_id: string | null
           headcount: number | null
           id: string
+          invoice_id: string | null
           notes: string | null
           origin_place: string | null
           partner_id: string | null
@@ -1205,9 +1287,11 @@ export type Database = {
           end_date?: string | null
           end_time?: string | null
           facilitator?: string | null
+          facilitator_id?: string | null
           feedback_form_id?: string | null
           headcount?: number | null
           id?: string
+          invoice_id?: string | null
           notes?: string | null
           origin_place?: string | null
           partner_id?: string | null
@@ -1236,9 +1320,11 @@ export type Database = {
           end_date?: string | null
           end_time?: string | null
           facilitator?: string | null
+          facilitator_id?: string | null
           feedback_form_id?: string | null
           headcount?: number | null
           id?: string
+          invoice_id?: string | null
           notes?: string | null
           origin_place?: string | null
           partner_id?: string | null
@@ -1256,6 +1342,13 @@ export type Database = {
           visitor_group?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "visits_facilitator_id_fkey"
+            columns: ["facilitator_id"]
+            isOneToOne: false
+            referencedRelation: "facilitators"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "visits_feedback_form_id_fkey"
             columns: ["feedback_form_id"]
@@ -1527,6 +1620,17 @@ export type Database = {
         }[]
       }
       dashboard_feedback_stats: {
+        Args: {
+          p_booking_channel?: string
+          p_from: string
+          p_program?: string
+          p_to: string
+          p_village_id?: string
+          p_visitor_category?: string
+        }
+        Returns: Json
+      }
+      dashboard_revenue_stats: {
         Args: {
           p_booking_channel?: string
           p_from: string

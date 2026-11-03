@@ -129,6 +129,7 @@ export async function createRuleSetItem(ruleSetId: string, input: RuleInput): Pr
     offset_minutes: parsed.data.offsetMinutes,
     template_name: parsed.data.templateName,
     template_language: parsed.data.templateLanguage,
+    recipients: parsed.data.recipients,
     enabled: parsed.data.enabled,
   });
   if (error) return { error: "Could not add the message." };
@@ -150,6 +151,7 @@ export async function updateRuleSetItem(id: string, input: RuleInput): Promise<M
       offset_minutes: parsed.data.offsetMinutes,
       template_name: parsed.data.templateName,
       template_language: parsed.data.templateLanguage,
+      recipients: parsed.data.recipients,
       enabled: parsed.data.enabled,
     })
     .eq("id", id);
@@ -200,6 +202,7 @@ export async function applyRuleSetToVisit(visitId: string, ruleSetId: string): P
       offset_minutes: i.offset_minutes,
       template_name: i.template_name,
       template_language: i.template_language,
+      recipients: i.recipients,
       enabled: true,
       source_item_id: i.id,
     })),
@@ -222,6 +225,7 @@ export async function createVisitRule(visitId: string, input: RuleInput): Promis
     offset_minutes: parsed.data.offsetMinutes,
     template_name: parsed.data.templateName,
     template_language: parsed.data.templateLanguage,
+    recipients: parsed.data.recipients,
     enabled: parsed.data.enabled,
   });
   if (error) return { error: "Could not add the message." };
@@ -243,6 +247,7 @@ export async function updateVisitRule(id: string, input: RuleInput): Promise<Mes
       offset_minutes: parsed.data.offsetMinutes,
       template_name: parsed.data.templateName,
       template_language: parsed.data.templateLanguage,
+      recipients: parsed.data.recipients,
       enabled: parsed.data.enabled,
     })
     .eq("id", id);
@@ -267,6 +272,7 @@ export interface VisitMessagingRule {
   offsetMinutes: number;
   templateName: string;
   templateLanguage: string;
+  recipients: string;
   enabled: boolean;
 }
 
@@ -316,6 +322,7 @@ export async function getVisitMessaging(visitId: string): Promise<{
       offsetMinutes: r.offset_minutes,
       templateName: r.template_name,
       templateLanguage: r.template_language,
+      recipients: r.recipients,
       enabled: r.enabled,
     })),
     sends: (sends ?? []).map((s) => {

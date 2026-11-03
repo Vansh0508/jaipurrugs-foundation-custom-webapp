@@ -16,7 +16,7 @@ import {
   type VisitMessagingRule,
   type VisitMessagingSend,
 } from "@/lib/actions/messaging";
-import { RESENDABLE_STATUSES, describeTiming, sendStatusMeta, type RuleAnchor, type RuleInput, type TemplateOption } from "@/lib/visits/messaging";
+import { RESENDABLE_STATUSES, describeTiming, recipientsLabel, sendStatusMeta, type RuleAnchor, type RuleInput, type RuleRecipients, type TemplateOption } from "@/lib/visits/messaging";
 import { formatDateRange } from "@/lib/visits/time";
 import type { VisitListItem } from "@/lib/visits/types";
 import { RuleForm } from "./rule-form";
@@ -164,6 +164,7 @@ function MessagingBody({
                   <span className="text-sm font-medium">{rule.name}</span>
                   <span className="text-xs text-muted">
                     {describeTiming(rule.anchor, rule.offsetMinutes)} · {rule.templateName} ({rule.templateLanguage})
+                    {rule.recipients !== "all" ? ` · ${recipientsLabel(rule.recipients)}` : ""}
                   </span>
                 </div>
                 <Switch
@@ -177,6 +178,7 @@ function MessagingBody({
                         offsetMinutes: rule.offsetMinutes,
                         templateName: rule.templateName,
                         templateLanguage: rule.templateLanguage,
+                        recipients: rule.recipients as RuleRecipients,
                         enabled: selected,
                       }),
                     )

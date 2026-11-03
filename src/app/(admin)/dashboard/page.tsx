@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   dashboardRpcArgs,
   parseDashboardStats,
+  parseRevenueStats,
   resolveDashboardFilters,
   type DashboardSearchParams,
 } from "@/lib/visits/dashboard";
@@ -16,10 +17,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const args = dashboardRpcArgs(filters);
   const supabase = await createClient();
 
-  const [{ data, error }, { data: feedback }, { data: villages }] = await Promise.all([
+  const [{ data, error }, { data: feedback }, { data: villages }, { data: revenue }] = await Promise.all([
     supabase.rpc("dashboard_stats", args),
     supabase.rpc("dashboard_feedback_stats", args),
     supabase.from("villages").select("id, name").order("name"),
+    supabase.rpc("dashboard_revenue_stats", args),
   ]);
   const stats = error ? null : parseDashboardStats(data, feedback);
 
@@ -32,5 +34,5 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     );
   }
 
-  return <DashboardView filters={filters} stats={stats} villages={villages ?? []} />;
+  return <DashboardView filters={filters} revenue={parseRevenueStats(revenue)} stats={stats} villages={villages ?? []} />;
 }

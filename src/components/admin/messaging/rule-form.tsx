@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button, Description, Input, Label, ListBox, Select, Switch, TextField } from "@heroui/react";
-import { RULE_ANCHORS, fromMinutes, toMinutes, type OffsetUnit, type RuleAnchor, type RuleInput, type TemplateOption } from "@/lib/visits/messaging";
+import { RULE_ANCHORS, RULE_RECIPIENTS, fromMinutes, toMinutes, type OffsetUnit, type RuleAnchor, type RuleInput, type RuleRecipients, type TemplateOption } from "@/lib/visits/messaging";
 
 export interface RuleFormValue {
   name: string;
@@ -10,6 +10,7 @@ export interface RuleFormValue {
   offsetMinutes: number;
   templateName: string;
   templateLanguage: string;
+  recipients: string;
   enabled: boolean;
 }
 
@@ -43,6 +44,7 @@ export function RuleForm({
   const [amount, setAmount] = useState(String(initial.amount));
   const [unit, setUnit] = useState<OffsetUnit>(initial.unit);
   const [template, setTemplate] = useState(value ? templateKey({ name: value.templateName, language: value.templateLanguage }) : "");
+  const [recipients, setRecipients] = useState(value?.recipients ?? "all");
   const [enabled, setEnabled] = useState(value?.enabled ?? true);
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
@@ -65,6 +67,7 @@ export function RuleForm({
       offsetMinutes: toMinutes(Number(amount || 0), unit),
       templateName: templateName ?? "",
       templateLanguage: templateLanguage ?? "",
+      recipients: recipients as RuleRecipients,
       enabled,
     });
     setIsPending(false);
@@ -118,6 +121,24 @@ export function RuleForm({
           </Select.Popover>
         </Select>
       </div>
+
+      <Select value={recipients} onChange={(key) => key && setRecipients(String(key))}>
+        <Label>Sent to</Label>
+        <Select.Trigger>
+          <Select.Value />
+          <Select.Indicator />
+        </Select.Trigger>
+        <Select.Popover>
+          <ListBox>
+            {RULE_RECIPIENTS.map((r) => (
+              <ListBox.Item key={r.id} id={r.id} textValue={r.label}>
+                {r.label}
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+            ))}
+          </ListBox>
+        </Select.Popover>
+      </Select>
 
       <Select isRequired value={template || null} onChange={(key) => key && setTemplate(String(key))}>
         <Label>WhatsApp template</Label>

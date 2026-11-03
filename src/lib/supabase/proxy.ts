@@ -16,6 +16,7 @@ const ADMIN_PATH_PREFIXES = [
   "/trips",
   "/villages",
   "/partners",
+  "/facilitators",
   "/messaging",
 ];
 

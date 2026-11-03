@@ -1,10 +1,11 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { Children, type ReactNode } from "react";
 import { ArrowsExpand, ChevronDown, Envelope, LayoutSideContentRight, Pencil, Persons } from "@gravity-ui/icons";
 import { Button, Chip, Drawer, Dropdown, Label, Modal } from "@heroui/react";
 import { formatPhone } from "@/lib/mastra/phone";
 import {
+  SALE_CHANNELS,
   VISIT_STATUSES,
   bookingChannelLabel,
   programLabel,
@@ -22,7 +23,7 @@ type Row = { label: string; value: React.ReactNode };
 /** A titled block of label/value rows. Empty rows are dropped; an empty section isn't shown. */
 function Section({ title, rows, children }: { title: string; rows?: Row[]; children?: React.ReactNode }) {
   const filled = (rows ?? []).filter((row) => row.value !== null && row.value !== undefined && row.value !== "");
-  if (filled.length === 0 && !children) return null;
+  if (filled.length === 0 && Children.toArray(children).length === 0) return null;
   return (
     <section className="flex flex-col gap-2.5">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</h3>
@@ -94,16 +95,15 @@ function VisitDetails({
       <Section
         title="Team"
         rows={[
-          { label: "JRF coordinator", value: visit.poc_name },
+          { label: "Facilitator", value: visit.poc_name },
           {
-            label: "Coordinator phone",
+            label: "Facilitator phone",
             value: visit.poc_phone ? (
               <a className="text-accent hover:underline" href={`tel:${visit.poc_phone.replace(/\s+/g, "")}`}>
                 {formatPhone(visit.poc_phone)}
               </a>
             ) : null,
           },
-          { label: "Facilitator / host", value: visit.facilitator },
           { label: "Partner", value: partner },
         ]}
       />
@@ -155,13 +155,35 @@ function VisitDetails({
       <Section
         title="Payment"
         rows={[
-          { label: "Amount charged", value: visit.amount_charged !== null ? rupees.format(visit.amount_charged) : null },
+          {
+            label: "Rural Experience revenue",
+            value: visit.amount_charged !== null ? rupees.format(visit.amount_charged) : null,
+          },
+          { label: "Invoice ID", value: visit.invoice_id },
           {
             label: "To artisan families",
             value: visit.amount_to_artisans !== null ? rupees.format(visit.amount_to_artisans) : null,
           },
         ]}
-      />
+      >
+        {SALE_CHANNELS.map((channel) => {
+          const sales = visit.sales.filter((sale) => sale.channel === channel.id);
+          if (sales.length === 0) return null;
+          return (
+            <div key={channel.id} className="flex flex-col gap-1 text-sm">
+              <span className="text-muted">{channel.label}</span>
+              <ul className="flex flex-col divide-y divide-border/60 rounded-xl border border-border/70">
+                {sales.map((sale) => (
+                  <li key={sale.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                    <span className="min-w-0 break-words">{sale.invoice_id}</span>
+                    <span className="shrink-0">{rupees.format(sale.amount)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </Section>
 
       <Section title="After the visit" rows={[{ label: "Feedback form", value: feedbackForm }]} />
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check } from "@gravity-ui/icons";
+import { Check, Plus, TrashBin } from "@gravity-ui/icons";
 import {
   AlertDialog,
   Autocomplete,
@@ -28,17 +28,19 @@ import {
 } from "@heroui/react";
 import { parseDate, parseTime, type CalendarDate, type Time } from "@internationalized/date";
 import { findOrCreateVillage } from "@/lib/actions/villages";
-import { createVisit, deleteVisit, updateVisit } from "@/lib/actions/visits";
+import { createVisit, setVisitStatus, updateVisit } from "@/lib/actions/visits";
 import {
   BOOKING_CHANNELS,
   PROGRAM_CATEGORIES,
+  SALE_CHANNELS,
   VISIT_STATUSES,
   VISITOR_CATEGORIES,
 } from "@/lib/visits/constants";
+import { formatInr } from "@/lib/visits/dashboard";
 import { visitSchema, type VisitInput } from "@/lib/visits/schemas";
 import { timeInputValue } from "@/lib/visits/time";
 import type { VillageOption, VisitListItem, VisitReference } from "@/lib/visits/types";
-import { PhoneField, joinPhone, splitPhone } from "./phone-field";
+import { formatPhone } from "@/lib/mastra/phone";
 
 const NONE = "__none";
 
@@ -56,16 +58,14 @@ const STEPS: { title: string; fields: (keyof VisitInput)[] }[] = [
       "endTime",
       "visitorCategory",
       "bookingChannel",
-      "pocName",
-      "pocPhone",
-      "facilitator",
+      "facilitatorId",
       "partnerId",
       "headcount",
       "originPlace",
     ],
   },
   { title: "Locations", fields: ["villageIds", "experienceIds"] },
-  { title: "Payment", fields: ["source", "amountCharged", "amountToArtisans"] },
+  { title: "Payment", fields: ["source", "amountCharged", "invoiceId", "amountToArtisans", "sales"] },
   { title: "Internal", fields: ["feedbackFormId", "notes"] },
 ];
 
@@ -308,21 +308,77 @@ function LocationPicker({
   );
 }
 
+type SaleDraft = { key: string; invoiceId: string; amount: string };
+
+/** The invoices for one sales channel (JR sales or JR Farms) attributed to the visit. */
+function SalesEditor({
+  label,
+  rows,
+  onChange,
+}: {
+  label: string;
+  rows: SaleDraft[];
+  onChange: (rows: SaleDraft[]) => void;
+}) {
+  const total = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+
+  function update(key: string, changes: Partial<SaleDraft>) {
+    onChange(rows.map((row) => (row.key === key ? { ...row, ...changes } : row)));
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-border p-3 sm:col-span-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium">{label}</span>
+        {rows.length > 0 ? <span className="text-xs text-muted">Total {formatInr(total)}</span> : null}
+      </div>
+      {rows.map((row) => (
+        <div key={row.key} className="grid grid-cols-[1fr_9rem_auto] items-end gap-2">
+          <TextField aria-label={`${label} invoice ID`} value={row.invoiceId} onChange={(v) => update(row.key, { invoiceId: v })}>
+            <Input placeholder="Invoice ID" />
+          </TextField>
+          <TextField aria-label={`${label} amount`} value={row.amount} onChange={(v) => update(row.key, { amount: v })}>
+            <Input min={0} placeholder="Amount (₹)" step="0.01" type="number" />
+          </TextField>
+          <Button
+            isIconOnly
+            aria-label="Remove invoice"
+            type="button"
+            variant="ghost"
+            onPress={() => onChange(rows.filter((r) => r.key !== row.key))}
+          >
+            <TrashBin className="size-4 text-danger" />
+          </Button>
+        </div>
+      ))}
+      <Button
+        className="self-start"
+        size="sm"
+        type="button"
+        variant="secondary"
+        onPress={() => onChange([...rows, { key: crypto.randomUUID(), invoiceId: "", amount: "" }])}
+      >
+        <Plus className="size-4" />
+        Add invoice
+      </Button>
+    </div>
+  );
+}
+
 function VisitForm({
   visit,
   defaultDate,
   reference,
   onSaved,
-  onDeleted,
+  onCancelled,
 }: {
   visit: VisitListItem | null;
   defaultDate: string;
   reference: VisitReference;
   onSaved: (created?: VisitListItem) => void;
-  onDeleted: () => void;
+  onCancelled: () => void;
 }) {
   const isEditing = visit !== null;
-  const initialPhone = splitPhone(visit?.poc_phone);
   const firstDay = visit?.visit_date ?? defaultDate;
 
   const [programCategory, setProgramCategory] = useState<string>(visit?.program_category ?? "rural_experience");
@@ -334,10 +390,7 @@ function VisitForm({
   const [endTime, setEndTime] = useState<Time | null>(() => toTime(visit?.end_time));
   const [visitorCategory, setVisitorCategory] = useState(visit?.visitor_category ?? "");
   const [bookingChannel, setBookingChannel] = useState(visit?.booking_channel ?? "");
-  const [pocName, setPocName] = useState(visit?.poc_name ?? "");
-  const [phoneCode, setPhoneCode] = useState(initialPhone.code);
-  const [phoneNumber, setPhoneNumber] = useState(initialPhone.number);
-  const [facilitator, setFacilitator] = useState(visit?.facilitator ?? "");
+  const [facilitatorId, setFacilitatorId] = useState(visit?.facilitator_id ?? "");
   const [partnerId, setPartnerId] = useState(visit?.partner_id ?? "");
   const [headcount, setHeadcount] = useState(numberToText(visit?.headcount ?? null));
   const [originPlace, setOriginPlace] = useState(visit?.origin_place ?? "");
@@ -345,6 +398,17 @@ function VisitForm({
   const [experienceIds, setExperienceIds] = useState<string[]>(visit?.experienceIds ?? []);
   const [source, setSource] = useState(visit?.source ?? "");
   const [amountCharged, setAmountCharged] = useState(numberToText(visit?.amount_charged ?? null));
+  const [invoiceId, setInvoiceId] = useState(visit?.invoice_id ?? "");
+  const [sales, setSales] = useState<Record<string, SaleDraft[]>>(() =>
+    Object.fromEntries(
+      SALE_CHANNELS.map((channel) => [
+        channel.id,
+        (visit?.sales ?? [])
+          .filter((sale) => sale.channel === channel.id)
+          .map((sale) => ({ key: sale.id, invoiceId: sale.invoice_id, amount: numberToText(sale.amount) })),
+      ]),
+    ),
+  );
   const [amountToArtisans, setAmountToArtisans] = useState(numberToText(visit?.amount_to_artisans ?? null));
   const [feedbackFormId, setFeedbackFormId] = useState(visit?.feedback_form_id ?? "");
   const [notes, setNotes] = useState(visit?.notes ?? "");
@@ -356,8 +420,8 @@ function VisitForm({
   const [reached, setReached] = useState(isEditing ? LAST_STEP : 0);
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
-  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isConfirmingCancel, setIsConfirmingCancel] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const locations = useMemo(() => {
     const known = new Set(reference.villages.map((v) => v.id));
@@ -371,6 +435,13 @@ function VisitForm({
       ),
     [reference.experiences, villageIds, experienceIds],
   );
+  // Active facilitators, plus the one already on this visit even if they have since been deactivated.
+  const facilitatorOptions = reference.facilitators
+    .filter((f) => f.is_active || f.id === facilitatorId)
+    .map((f) => ({ id: f.id, label: f.is_active ? f.name : `${f.name} (inactive)` }));
+  const selectedFacilitator = reference.facilitators.find((f) => f.id === facilitatorId);
+  // Visits from before facilitators existed carry a hand-typed name and phone.
+  const legacyCoordinator = !visit?.facilitator_id && visit?.poc_name ? visit : null;
   const partnerOptions = reference.partners
     .filter((p) => p.is_active || p.id === partnerId)
     .map((p) => ({ id: p.id, label: p.name }));
@@ -390,7 +461,6 @@ function VisitForm({
   }
 
   function buildInput(): VisitInput {
-    const number = phoneNumber.trim();
     return {
       programCategory: programCategory as VisitInput["programCategory"],
       visitDate: dates?.start.toString() ?? "",
@@ -398,9 +468,7 @@ function VisitForm({
       startTime: fromTime(startTime),
       endTime: fromTime(endTime),
       status: status as VisitInput["status"],
-      pocName,
-      pocPhone: joinPhone(phoneCode, number),
-      facilitator,
+      facilitatorId,
       partnerId,
       headcount,
       source,
@@ -408,20 +476,23 @@ function VisitForm({
       visitorCategory: visitorCategory as VisitInput["visitorCategory"],
       bookingChannel,
       amountCharged,
+      invoiceId,
       amountToArtisans,
       notes,
       feedbackFormId,
       villageIds,
       experienceIds,
+      // A row left completely empty is ignored; a half-filled one is reported by the schema.
+      sales: SALE_CHANNELS.flatMap((channel) =>
+        (sales[channel.id] ?? [])
+          .filter((row) => row.invoiceId.trim() !== "" || row.amount.trim() !== "")
+          .map((row) => ({ channel: channel.id, invoiceId: row.invoiceId, amount: row.amount })),
+      ),
     };
   }
 
   /** The first problem on the given steps, with the step it belongs to. */
   function findProblem(steps: number[]): { step: number; message: string } | null {
-    const number = phoneNumber.trim();
-    if (steps.includes(0) && number && !/^[\d\s-]{6,20}$/.test(number)) {
-      return { step: 0, message: "Enter the coordinator's phone number using digits only." };
-    }
     const parsed = visitSchema.safeParse(buildInput());
     if (parsed.success) return null;
     for (const issue of parsed.error.issues) {
@@ -481,18 +552,18 @@ function VisitForm({
     else void handleSave();
   }
 
-  async function handleDelete() {
+  /** Marks the visit cancelled. Whatever is typed in the form but not saved is dropped with it. */
+  async function handleCancelVisit() {
     if (!visit) return;
-    setIsDeleting(true);
-    const result = await deleteVisit(visit.id);
-    setIsDeleting(false);
+    setIsCancelling(true);
+    const result = await setVisitStatus(visit.id, "cancelled");
+    setIsCancelling(false);
+    setIsConfirmingCancel(false);
     if (result.error) {
       setError(result.error);
-      setIsConfirmingDelete(false);
       return;
     }
-    setIsConfirmingDelete(false);
-    onDeleted();
+    onCancelled();
   }
 
   return (
@@ -596,22 +667,27 @@ function VisitForm({
               onChange={setBookingChannel}
             />
 
-            <TextField value={pocName} onChange={setPocName}>
-              <Label>JRF coordinator</Label>
-              <Input placeholder="Name" />
-            </TextField>
-            <PhoneField
-              code={phoneCode}
-              label="Coordinator phone"
-              number={phoneNumber}
-              onCodeChange={setPhoneCode}
-              onNumberChange={setPhoneNumber}
-            />
+            <div className="flex flex-col gap-1">
+              <OptionSelect
+                label="Facilitator"
+                noneLabel="Not assigned"
+                options={facilitatorOptions}
+                value={facilitatorId}
+                onChange={setFacilitatorId}
+              />
+              {selectedFacilitator ? (
+                <p className="text-xs text-muted">{formatPhone(selectedFacilitator.phone)}</p>
+              ) : legacyCoordinator ? (
+                <p className="text-xs text-muted">
+                  Previously entered: {legacyCoordinator.poc_name}
+                  {legacyCoordinator.poc_phone ? ` · ${formatPhone(legacyCoordinator.poc_phone)}` : ""}. Pick a
+                  facilitator to replace it.
+                </p>
+              ) : reference.facilitators.length === 0 ? (
+                <p className="text-xs text-muted">Add facilitators on the Facilitators page first.</p>
+              ) : null}
+            </div>
 
-            <TextField value={facilitator} onChange={setFacilitator}>
-              <Label>Facilitator / host</Label>
-              <Input placeholder="e.g. Shanti Devi" />
-            </TextField>
             <OptionSelect
               label="Partner (optional)"
               noneLabel="No partner"
@@ -670,13 +746,28 @@ function VisitForm({
               <Input placeholder="e.g. MNIT Jaipur" />
             </TextField>
             <TextField value={amountCharged} onChange={setAmountCharged}>
-              <Label>Amount charged (₹)</Label>
+              <Label>Rural Experience revenue (₹)</Label>
               <Input min={0} placeholder="e.g. 15000" step="0.01" type="number" />
+            </TextField>
+            <TextField value={invoiceId} onChange={setInvoiceId}>
+              <Label>Rural Experience invoice ID</Label>
+              <Input placeholder="e.g. INV-2026-0142" />
             </TextField>
             <TextField value={amountToArtisans} onChange={setAmountToArtisans}>
               <Label>Amount to artisan families (₹)</Label>
               <Input min={0} placeholder="e.g. 9000" step="0.01" type="number" />
             </TextField>
+            <p className="self-end pb-2 text-xs text-muted sm:col-span-1">
+              Sales that came from this visit are tracked separately below, by invoice.
+            </p>
+            {SALE_CHANNELS.map((channel) => (
+              <SalesEditor
+                key={channel.id}
+                label={`${channel.label} attributed to this visit`}
+                rows={sales[channel.id] ?? []}
+                onChange={(rows) => setSales((prev) => ({ ...prev, [channel.id]: rows }))}
+              />
+            ))}
           </div>
         ) : null}
 
@@ -705,9 +796,9 @@ function VisitForm({
                 Back
               </Button>
             ) : null}
-            {isEditing ? (
-              <Button type="button" variant="danger-soft" onPress={() => setIsConfirmingDelete(true)}>
-                Delete visit
+            {isEditing && visit.status !== "cancelled" ? (
+              <Button type="button" variant="danger-soft" onPress={() => setIsConfirmingCancel(true)}>
+                Cancel visit
               </Button>
             ) : null}
           </div>
@@ -729,28 +820,28 @@ function VisitForm({
         </div>
       </form>
 
-      <AlertDialog isOpen={isConfirmingDelete} onOpenChange={setIsConfirmingDelete}>
+      <AlertDialog isOpen={isConfirmingCancel} onOpenChange={setIsConfirmingCancel}>
         <AlertDialog.Backdrop>
           <AlertDialog.Container>
             <AlertDialog.Dialog className="sm:max-w-[420px]">
               <AlertDialog.CloseTrigger />
               <AlertDialog.Header>
                 <AlertDialog.Icon status="danger" />
-                <AlertDialog.Heading>Delete this visit?</AlertDialog.Heading>
+                <AlertDialog.Heading>Cancel this visit?</AlertDialog.Heading>
               </AlertDialog.Header>
               <AlertDialog.Body>
                 <p>
-                  The visit, its guest list and any messages still scheduled for it are removed. The guests
-                  themselves stay in Leads. This can&apos;t be undone — to keep the record, mark it cancelled
-                  instead.
+                  The visit is marked cancelled and any WhatsApp messages still scheduled for it are stopped.{" "}
+                  <strong>Changes you have made in this form but not saved will be discarded.</strong> The visit
+                  and its guest list stay on record.
                 </p>
               </AlertDialog.Body>
               <AlertDialog.Footer>
                 <Button slot="close" variant="tertiary">
-                  Cancel
+                  Keep visit
                 </Button>
-                <Button isPending={isDeleting} variant="danger" onPress={handleDelete}>
-                  Delete visit
+                <Button isPending={isCancelling} variant="danger" onPress={handleCancelVisit}>
+                  Cancel visit
                 </Button>
               </AlertDialog.Footer>
             </AlertDialog.Dialog>
@@ -792,7 +883,7 @@ export function VisitFormModal({
               defaultDate={defaultDate}
               reference={reference}
               visit={visit}
-              onDeleted={() => {
+              onCancelled={() => {
                 onOpenChange(false);
                 onSaved();
               }}

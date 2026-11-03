@@ -192,6 +192,7 @@ export function TripsView({
   const [status, setStatus] = useState(ALL);
   const [program, setProgram] = useState(ALL);
   const [villageId, setVillageId] = useState(ALL);
+  const [facilitatorId, setFacilitatorId] = useState(ALL);
   const [dateRange, setDateRange] = useState<DateRange | null>(null);
 
   const [detailId, setDetailId] = useState<string | null>(initialVisitId);
@@ -215,6 +216,7 @@ export function TripsView({
       if (status !== ALL && v.status !== status) return false;
       if (program !== ALL && v.program_category !== program) return false;
       if (villageId !== ALL && !v.villageIds.includes(villageId)) return false;
+      if (facilitatorId !== ALL && v.facilitator_id !== facilitatorId) return false;
       if (from && to) {
         // Keep visits that overlap the chosen range.
         if (!v.visit_date) return false;
@@ -237,9 +239,9 @@ export function TripsView({
         ...v.villageIds.map((id) => villageName.get(id) ?? ""),
       ].some((s) => s.toLowerCase().includes(q));
     });
-  }, [visits, status, program, villageId, dateRange, query, villageName]);
+  }, [visits, status, program, villageId, facilitatorId, dateRange, query, villageName]);
 
-  const filtersActive = query !== "" || status !== ALL || program !== ALL || villageId !== ALL || dateRange !== null;
+  const filtersActive = query !== "" || status !== ALL || program !== ALL || villageId !== ALL || facilitatorId !== ALL || dateRange !== null;
 
   function changeView(next: TripsViewMode) {
     setView(next);
@@ -257,6 +259,7 @@ export function TripsView({
     setStatus(ALL);
     setProgram(ALL);
     setVillageId(ALL);
+    setFacilitatorId(ALL);
     setDateRange(null);
   }
 
@@ -324,7 +327,7 @@ export function TripsView({
           <Label>Search</Label>
           <SearchField.Group>
             <SearchField.SearchIcon />
-            <SearchField.Input placeholder="POC, coordinator, place, village…" />
+            <SearchField.Input placeholder="POC, facilitator, place, village…" />
             <SearchField.ClearButton />
           </SearchField.Group>
         </SearchField>
@@ -342,6 +345,16 @@ export function TripsView({
           options={reference.villages.map((v) => ({ id: v.id, label: v.name }))}
           value={villageId}
           onChange={setVillageId}
+        />
+        <FilterSelect
+          allLabel="All facilitators"
+          label="Facilitator"
+          options={reference.facilitators.map((f) => ({
+            id: f.id,
+            label: f.is_active ? f.name : `${f.name} (inactive)`,
+          }))}
+          value={facilitatorId}
+          onChange={setFacilitatorId}
         />
         <DateRangeFilter value={dateRange} onChange={changeDateRange} />
         {filtersActive ? (
@@ -391,7 +404,7 @@ export function TripsView({
                 <Table.Column isRowHeader>Date</Table.Column>
                 <Table.Column>Visit</Table.Column>
                 <Table.Column>Primary POC</Table.Column>
-                <Table.Column>Coordinator</Table.Column>
+                <Table.Column>Facilitator</Table.Column>
                 <Table.Column>Group</Table.Column>
                 <Table.Column>Headcount</Table.Column>
                 <Table.Column>Villages</Table.Column>

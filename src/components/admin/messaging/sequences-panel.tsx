@@ -14,7 +14,7 @@ import {
   updateRuleSetItem,
 } from "@/lib/actions/messaging";
 import { PROGRAM_CATEGORIES } from "@/lib/visits/constants";
-import { describeTiming, type RuleAnchor, type TemplateOption } from "@/lib/visits/messaging";
+import { describeTiming, recipientsLabel, type RuleAnchor, type TemplateOption } from "@/lib/visits/messaging";
 import { RuleForm } from "./rule-form";
 
 export interface RuleSetItemRow {
@@ -24,6 +24,7 @@ export interface RuleSetItemRow {
   offset_minutes: number;
   template_name: string;
   template_language: string;
+  recipients: string;
   enabled: boolean;
 }
 
@@ -194,6 +195,7 @@ export function SequencesPanel({
                           offsetMinutes: item.offset_minutes,
                           templateName: item.template_name,
                           templateLanguage: item.template_language,
+                          recipients: item.recipients,
                           enabled: item.enabled,
                         }}
                         onCancel={() => setEditingItem(null)}
@@ -216,6 +218,7 @@ export function SequencesPanel({
                         </span>
                         <span className="text-xs text-muted">
                           {describeTiming(item.anchor as RuleAnchor, item.offset_minutes)} · {item.template_name} ({item.template_language})
+                          {item.recipients !== "all" ? ` · ${recipientsLabel(item.recipients)}` : ""}
                         </span>
                       </div>
                       <Button isIconOnly aria-label="Edit message" size="sm" variant="ghost" onPress={() => setEditingItem(item.id)}>

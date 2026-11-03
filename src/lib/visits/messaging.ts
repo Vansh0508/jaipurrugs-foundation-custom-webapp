@@ -10,6 +10,17 @@ export const RULE_ANCHORS = [
 
 export type RuleAnchor = (typeof RULE_ANCHORS)[number]["id"];
 
+export const RULE_RECIPIENTS = [
+  { id: "all", label: "All guests on the visit" },
+  { id: "primary", label: "Primary POC only" },
+] as const;
+
+export type RuleRecipients = (typeof RULE_RECIPIENTS)[number]["id"];
+
+export function recipientsLabel(id: string) {
+  return RULE_RECIPIENTS.find((r) => r.id === id)?.label ?? id;
+}
+
 export const SEND_STATUSES = [
   { id: "queued", label: "Scheduled", color: "accent" },
   { id: "processing", label: "Sending", color: "accent" },
@@ -63,6 +74,7 @@ export const ruleSchema = z.object({
   ),
   templateName: z.string().trim().min(1, "Choose a template.").max(120),
   templateLanguage: z.string().trim().min(2, "Choose a template.").max(20),
+  recipients: z.enum(RULE_RECIPIENTS.map((r) => r.id) as [RuleRecipients, ...RuleRecipients[]]).default("all"),
   enabled: z.boolean(),
 });
 

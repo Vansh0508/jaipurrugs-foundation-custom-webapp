@@ -4,9 +4,11 @@ import { bookingChannelLabel, programLabel, visitorCategoryLabel } from "@/lib/v
 import {
   ALL_PROGRAMS,
   formatInr,
+  type CategoryRevenueRow,
   type DashboardFilters as Filters,
   type DashboardStats,
   type LabelValue,
+  type RevenueStats,
 } from "@/lib/visits/dashboard";
 import { formatDate } from "@/lib/visits/time";
 import { StatCard } from "../visits/stat-card";
@@ -53,12 +55,73 @@ function relabel(items: LabelValue[], labelFor: (id: string) => string): LabelVa
   return items.map((item) => ({ ...item, label: labelFor(item.label) }));
 }
 
+const sumOf = (rows: CategoryRevenueRow[], key: keyof Omit<CategoryRevenueRow, "category">) =>
+  rows.reduce((total, row) => total + row[key], 0);
+
+/** Bookings, revenue and artisan payments for each visitor category. */
+function CategoryTable({ rows }: { rows: CategoryRevenueRow[] }) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-muted">No completed visits in this period.</p>;
+  }
+  const columns = [
+    { key: "bookings", label: "Bookings", money: false },
+    { key: "visitors", label: "Visitors", money: false },
+    { key: "revenue", label: "Rural Experience revenue", money: true },
+    { key: "jr_sales", label: "JR sales", money: true },
+    { key: "jr_farms", label: "JR Farms sales", money: true },
+    { key: "artisan_payments", label: "Artisan payments", money: true },
+  ] as const;
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[720px] text-sm">
+        <thead>
+          <tr className="border-b border-border text-left text-xs text-muted">
+            <th className="py-2 pr-4 font-medium">Visitor category</th>
+            {columns.map((c) => (
+              <th key={c.key} className="px-3 py-2 text-right font-medium">
+                {c.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border/60">
+          {rows.map((row) => (
+            <tr key={row.category}>
+              <td className="py-2 pr-4 font-medium">
+                {row.category === "unspecified" ? "Not specified" : visitorCategoryLabel(row.category)}
+              </td>
+              {columns.map((c) => (
+                <td key={c.key} className="px-3 py-2 text-right tabular-nums">
+                  {c.money ? formatInr(row[c.key]) : row[c.key]}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="border-t border-border font-semibold">
+            <td className="py-2 pr-4">Total</td>
+            {columns.map((c) => (
+              <td key={c.key} className="px-3 py-2 text-right tabular-nums">
+                {c.money ? formatInr(sumOf(rows, c.key)) : sumOf(rows, c.key)}
+              </td>
+            ))}
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
 export function DashboardView({
   stats,
+  revenue,
   filters,
   villages,
 }: {
   stats: DashboardStats;
+  /** Null when the revenue numbers could not be loaded. */
+  revenue: RevenueStats | null;
   filters: Filters;
   villages: { id: string; name: string }[];
 }) {
@@ -123,6 +186,39 @@ export function DashboardView({
           </ChartCard>
         </div>
       </Section>
+
+      {revenue ? (
+        <>
+          <Section
+            title="Revenue by source"
+            description="Kept apart so each source can be reconciled against its invoices. Completed visits in the period."
+          >
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <StatCard
+                label="Rural Experience"
+                value={formatInr(revenue.streams.rural_experience.amount)}
+                hint={`${revenue.streams.rural_experience.invoices} invoice${revenue.streams.rural_experience.invoices === 1 ? "" : "s"} · ${revenue.streams.rural_experience.visits} visit${revenue.streams.rural_experience.visits === 1 ? "" : "s"}`}
+              />
+              <StatCard
+                label="JR sales"
+                value={formatInr(revenue.streams.jr_sales.amount)}
+                hint={`${revenue.streams.jr_sales.invoices} invoice${revenue.streams.jr_sales.invoices === 1 ? "" : "s"} · ${revenue.streams.jr_sales.visits} visit${revenue.streams.jr_sales.visits === 1 ? "" : "s"}`}
+              />
+              <StatCard
+                label="JR Farms sales"
+                value={formatInr(revenue.streams.jr_farms.amount)}
+                hint={`${revenue.streams.jr_farms.invoices} invoice${revenue.streams.jr_farms.invoices === 1 ? "" : "s"} · ${revenue.streams.jr_farms.visits} visit${revenue.streams.jr_farms.visits === 1 ? "" : "s"}`}
+              />
+            </div>
+          </Section>
+
+          <Section title="By visitor category" description="Bookings, revenue and artisan payments for each kind of visitor.">
+            <ChartCard title="Visitor category breakdown" hint="completed visits">
+              <CategoryTable rows={revenue.by_category} />
+            </ChartCard>
+          </Section>
+        </>
+      ) : null}
 
       <Section
         title="Innovation"

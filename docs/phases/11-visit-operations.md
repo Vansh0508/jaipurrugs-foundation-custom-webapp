@@ -17,6 +17,8 @@ Builds on [phase 8](08-ai-agent.md), [phase 9](09-leads-templates.md) and [phase
 | M6 | Rule sets, scheduled-send queue, dispatch route, `visit:` template bindings, `/messaging` | Done (live sending not yet exercised) |
 | M7 | pg_cron + pg_net wiring, auto-complete job, monitoring | Done (needs the manual steps below) |
 | M8 | Public reviews: `reviews` table, Firecrawl fetch + review-organizer agent, Reviews tab on `/partners` | Done (live Firecrawl fetch not yet exercised — needs `FIRECRAWL_API_KEY`) |
+| M9 | `facilitators` (name, email, phone; JRF staff) replace the hand-typed coordinator name/phone on visits; `/facilitators` | Done |
+| M10 | Revenue by source (Rural Experience / JR sales / JR Farms, by invoice), visitor-category breakdown on the dashboard, `recipients` on message rules, 15-day referral sequence; visits are cancelled, not deleted, from the edit form | Migration `20261103120000` written, **not yet applied** |
 
 ## Agent access (M3)
 
@@ -25,6 +27,21 @@ Builds on [phase 8](08-ai-agent.md), [phase 9](09-leads-templates.md) and [phase
 - Tools (`src/lib/mastra/tools/visits-tool.ts`): `getMyVisits`, `getVisitItinerary` (phone-scoped, no identity argument), and `getExperiences`, `getVillages` (the same for everyone; active rows only). Raw database errors never reach the model.
 - `createVisitLoader` (`src/lib/mastra/visit-context.ts`) puts the contact's next and most recent visits into the prompt each turn, so a reply to a thank-you or reminder is understood as being about that visit.
 - Structured visit facts live in these tables; the knowledge base keeps prose (FAQs, prices, policies). Don't duplicate visit facts into KB articles — they go stale.
+
+## Facilitators (M9)
+
+- `public.facilitators` (name, email, phone, `is_active`) is the directory of JRF staff who run visits. Email is unique (case-insensitive). A visit points at one with `visits.facilitator_id` (`on delete restrict`: a facilitator with visits is deactivated, never deleted).
+- `visits.poc_name` / `poc_phone` are no longer typed by hand. Triggers copy the facilitator's name and phone onto the visit when `facilitator_id` is set, clear them when it is removed, and refresh them when a facilitator's name or phone is edited. They stay as columns because the agent RPCs, the scheduler and the `visit:poc_name` template variable read them — so none of those changed.
+- Visits created before this have a hand-typed `poc_name`/`poc_phone` and no `facilitator_id`. They are left alone (the visit form shows them as "Previously entered") until a facilitator is picked.
+- The facilitator is also the host: the same triggers copy the name into `visits.facilitator`, which the agent RPCs report as `host`. There is no separate host field in the UI. The trips filter bar (list and calendar) filters by facilitator.
+
+## Revenue streams, categories and referral (M10)
+
+- **Revenue is tracked per source.** Rural Experience revenue stays on the visit (`amount_charged`, now with `visits.invoice_id`). JR sales and JR Farms sales that came from a visit are rows in `public.visit_sales` (`channel` `jr_sales` | `jr_farms`, `invoice_id`, `amount`); a visit can have several. `(channel, invoice_id)` is unique, so an invoice can't be attributed to two visits. These are entered on the Payment step of the visit form and shown in the visit's detail panel.
+- `public.dashboard_revenue_stats(...)` takes the same filters as `dashboard_stats()` and returns the three streams (amount, invoices, visits) and a per-visitor-category breakdown (bookings, visitors, Rural Experience revenue, JR sales, JR Farms sales, artisan payments). Only **completed** visits in the period count, like the rest of the dashboard. `dashboard_stats()`'s "Total income" and "% to artisans" are unchanged and remain Rural Experience only, so JR sales never dilute the artisan share.
+- **Referral message.** Message rules (`message_rule_set_items`, `visit_message_rules`) have `recipients`: `all` guests or `primary` (the visit's primary POC only; the materializer filters on `visit_guests.is_primary`, and re-runs when the primary guest changes). The seeded sequence "Rural Experience — referral request" has one message, 15 days (`offset_minutes` 21600) after the visit is marked completed, to the primary POC. It is applied automatically to **new** Rural Experience visits only; existing visits are never back-filled. Its message is seeded **disabled** with the placeholder template `referral_request`: build and get that template approved (Templates), then pick it on the message (Messaging → Sequences) and switch it on. Until then nothing is copied onto visits.
+- Scheduled messaging is still globally off and in dry-run (Messaging → Settings), so nothing is sent until that is changed.
+- **Cancelling.** The edit form no longer has "Delete visit"; it has "Cancel visit", which marks the visit cancelled (the materializer cancels its queued messages) after warning that unsaved edits in the form are discarded.
 
 ## Dashboard and charts (M4)
 

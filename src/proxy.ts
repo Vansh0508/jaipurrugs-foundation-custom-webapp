@@ -24,6 +24,7 @@ export const config = {
     "/trips/:path*",
     "/villages/:path*",
     "/partners/:path*",
+    "/facilitators/:path*",
     "/messaging/:path*",
   ],
 };

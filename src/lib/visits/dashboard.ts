@@ -92,6 +92,40 @@ export function parseDashboardStats(raw: unknown, feedback?: unknown): Dashboard
   };
 }
 
+/** Totals for one revenue source over the filtered, completed visits. */
+export interface RevenueStream {
+  amount: number;
+  /** Invoices recorded (Rural Experience: visits with an invoice ID). */
+  invoices: number;
+  /** Visits that brought in revenue from this source. */
+  visits: number;
+}
+
+export interface CategoryRevenueRow {
+  /** A visitor category id, or "unspecified". */
+  category: string;
+  bookings: number;
+  visitors: number;
+  revenue: number;
+  jr_sales: number;
+  jr_farms: number;
+  artisan_payments: number;
+}
+
+/** Shape returned by public.dashboard_revenue_stats(), see 20261103120000_revenue_streams_referral.sql. */
+export interface RevenueStats {
+  streams: { rural_experience: RevenueStream; jr_sales: RevenueStream; jr_farms: RevenueStream };
+  by_category: CategoryRevenueRow[];
+}
+
+export function parseRevenueStats(raw: unknown): RevenueStats | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const r = raw as Record<string, unknown>;
+  const streams = r.streams as Record<string, unknown> | undefined;
+  if (!streams || typeof streams.rural_experience !== "object" || !Array.isArray(r.by_category)) return null;
+  return raw as RevenueStats;
+}
+
 export const DASHBOARD_RANGES = [
   { id: "3m", label: "Last 3 months", months: 3 },
   { id: "6m", label: "Last 6 months", months: 6 },

@@ -16,6 +16,7 @@ import {
   MapPin,
   Person,
   Persons,
+  PersonWorker,
   SquareListUl,
   Suitcase,
 } from "@gravity-ui/icons";
@@ -40,6 +41,7 @@ const NAV_GROUPS: { label?: string; items: { href: string; label: string; icon: 
       { href: "/trips", label: "Trips", icon: Suitcase },
       { href: "/villages", label: "Villages", icon: MapPin },
       { href: "/partners", label: "Partners", icon: Briefcase },
+      { href: "/facilitators", label: "Facilitators", icon: PersonWorker },
       { href: "/messaging", label: "Visit messages", icon: Bell },
     ],
   },

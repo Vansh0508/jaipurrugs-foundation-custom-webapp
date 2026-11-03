@@ -3,6 +3,7 @@ import {
   BOOKING_CHANNELS,
   GUEST_STATUSES,
   PROGRAM_CATEGORIES,
+  SALE_CHANNELS,
   VISIT_STATUSES,
   VISITOR_CATEGORIES,
 } from "./constants";
@@ -85,6 +86,14 @@ export const partnerSchema = z.object({
 
 export type PartnerInput = z.input<typeof partnerSchema>;
 
+export const facilitatorSchema = z.object({
+  name: z.string().trim().min(1, "Name is required.").max(120),
+  email: z.string().trim().min(1, "Email is required.").max(200).email("Enter a valid email address."),
+  phone: z.string().trim().min(1, "Phone number is required.").max(30),
+});
+
+export type FacilitatorInput = z.input<typeof facilitatorSchema>;
+
 export function blankToNull(value: string | null | undefined) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
@@ -129,6 +138,18 @@ const optionalEnum = <T extends readonly [string, ...string[]]>(values: T) =>
 
 const requiredDate = (message: string) => z.string(message).regex(/^\d{4}-\d{2}-\d{2}$/, message);
 
+/** One invoice for a JR or JR Farms sale attributed to a visit. */
+export const saleSchema = z.object({
+  channel: z.enum(ids(SALE_CHANNELS), "Pick JR sales or JR Farms."),
+  invoiceId: z.string().trim().min(1, "Enter the invoice ID for every sale.").max(60, "Keep invoice IDs under 60 characters."),
+  amount: z.preprocess(
+    (v) => (blank(v) ? NaN : Number(v)),
+    z.number("Enter the amount for every sale.").min(0, "Amounts can't be negative.").max(1_000_000_000, "That amount is too large."),
+  ),
+});
+
+export type SaleInput = z.input<typeof saleSchema>;
+
 export const visitSchema = z
   .object({
     programCategory: z.enum(ids(PROGRAM_CATEGORIES), "Pick the program."),
@@ -138,25 +159,37 @@ export const visitSchema = z
     startTime: optionalTime,
     endTime: optionalTime,
     status: z.enum(ids(VISIT_STATUSES)),
-    pocName: optionalText(80),
-    pocPhone: optionalText(30),
-    facilitator: optionalText(80),
+    // The JRF staff member who runs (hosts) the visit; their name and phone are copied onto
+    // the visit by the database (see supabase/migrations/20261103*_facilitator*.sql).
+    facilitatorId: optionalUuid,
     partnerId: optionalUuid,
     headcount: optionalInt(0, 100_000, "Headcount must be a whole number."),
     source: optionalText(120),
     originPlace: optionalText(120),
     visitorCategory: z.enum(ids(VISITOR_CATEGORIES), "Pick the visitor category."),
     bookingChannel: optionalEnum(ids(BOOKING_CHANNELS)),
+    // Rural Experience revenue and its invoice.
     amountCharged: optionalMoney,
+    invoiceId: optionalText(60),
     amountToArtisans: optionalMoney,
     notes: optionalText(2000),
     feedbackFormId: optionalUuid,
     villageIds: z.array(z.string().uuid()).min(1, "Pick at least one location.").max(50),
     experienceIds: z.array(z.string().uuid()).max(200),
+    sales: z.array(saleSchema).max(100, "A visit can have up to 100 sales invoices."),
   })
   .superRefine((visit, ctx) => {
     if (visit.endDate && visit.endDate < visit.visitDate) {
       ctx.addIssue({ code: "custom", message: "The visit can't end before it starts.", path: ["endDate"] });
+    }
+    const seen = new Set<string>();
+    for (const sale of visit.sales) {
+      const key = `${sale.channel}|${sale.invoiceId}`;
+      if (seen.has(key)) {
+        ctx.addIssue({ code: "custom", message: `Invoice ${sale.invoiceId} is listed twice.`, path: ["sales"] });
+        break;
+      }
+      seen.add(key);
     }
     if (visit.programCategory === "rural_experience" && !visit.bookingChannel) {
       ctx.addIssue({ code: "custom", message: "Pick the booking channel for a Rural Experience visit.", path: ["bookingChannel"] });

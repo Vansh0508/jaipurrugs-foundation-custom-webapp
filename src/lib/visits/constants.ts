@@ -47,6 +47,12 @@ export const BOOKING_CHANNELS = [
   { id: "partner_agency", label: "Partner agency" },
 ] as const;
 
+/** Sales attributed to a visit besides its own Rural Experience revenue; each is tracked by invoice. */
+export const SALE_CHANNELS = [
+  { id: "jr_sales", label: "JR sales" },
+  { id: "jr_farms", label: "JR Farms sales" },
+] as const;
+
 export const GUEST_STATUSES = [
   { id: "invited", label: "Invited" },
   { id: "attended", label: "Attended" },
@@ -89,6 +95,7 @@ export const visitStatusLabel = (id: string) => labelOf(VISIT_STATUSES, id);
 export const programLabel = (id: string) => labelOf(PROGRAM_CATEGORIES, id);
 export const visitorCategoryLabel = (id: string | null) => labelOf(VISITOR_CATEGORIES, id);
 export const bookingChannelLabel = (id: string | null) => labelOf(BOOKING_CHANNELS, id);
+export const saleChannelLabel = (id: string) => labelOf(SALE_CHANNELS, id);
 export const guestStatusLabel = (id: string) => labelOf(GUEST_STATUSES, id);
 
 export function visitStatusColor(id: string): VisitStatusColor {

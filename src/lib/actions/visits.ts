@@ -31,9 +31,8 @@ function visitRow(data: ReturnType<typeof visitSchema.parse>) {
     start_time: data.startTime,
     end_time: data.endTime,
     status: data.status,
-    poc_name: blankToNull(data.pocName),
-    poc_phone: blankToNull(data.pocPhone),
-    facilitator: blankToNull(data.facilitator),
+    // poc_name / poc_phone / facilitator (the host) are filled in from the facilitator by a trigger.
+    facilitator_id: data.facilitatorId,
     partner_id: data.partnerId,
     headcount: data.headcount,
     source: blankToNull(data.source),
@@ -42,6 +41,7 @@ function visitRow(data: ReturnType<typeof visitSchema.parse>) {
     visitor_category: data.visitorCategory,
     booking_channel: data.bookingChannel,
     amount_charged: data.amountCharged,
+    invoice_id: blankToNull(data.invoiceId),
     amount_to_artisans: data.amountToArtisans,
     notes: blankToNull(data.notes),
     feedback_form_id: data.feedbackFormId,
@@ -102,6 +102,55 @@ async function syncVisitLinks(
   return null;
 }
 
+/**
+ * Makes visit_sales match the invoices in the form. New invoices go in first, so an invoice that is
+ * already attributed to another visit fails before anything is changed or removed.
+ */
+async function syncVisitSales(
+  supabase: SupabaseServerClient,
+  visitId: string,
+  sales: ReturnType<typeof visitSchema.parse>["sales"],
+  createdBy: string,
+): Promise<string | null> {
+  const { data: existing } = await supabase
+    .from("visit_sales")
+    .select("id, channel, invoice_id, amount")
+    .eq("visit_id", visitId);
+  const keyOf = (channel: string, invoiceId: string) => `${channel}|${invoiceId}`;
+  const have = new Map((existing ?? []).map((row) => [keyOf(row.channel, row.invoice_id), row]));
+  const want = new Map(sales.map((sale) => [keyOf(sale.channel, sale.invoiceId), sale]));
+
+  const toInsert = sales.filter((sale) => !have.has(keyOf(sale.channel, sale.invoiceId)));
+  if (toInsert.length > 0) {
+    const { error } = await supabase.from("visit_sales").insert(
+      toInsert.map((sale) => ({
+        visit_id: visitId,
+        channel: sale.channel,
+        invoice_id: sale.invoiceId,
+        amount: sale.amount,
+        created_by: createdBy,
+      })),
+    );
+    if (error) {
+      return error.code === "23505"
+        ? "One of those invoice IDs is already attributed to another visit."
+        : "Could not save the sales invoices.";
+    }
+  }
+
+  for (const [key, row] of have) {
+    const sale = want.get(key);
+    if (!sale) {
+      const { error } = await supabase.from("visit_sales").delete().eq("id", row.id);
+      if (error) return "Could not remove a sales invoice.";
+    } else if (Number(row.amount) !== sale.amount) {
+      const { error } = await supabase.from("visit_sales").update({ amount: sale.amount }).eq("id", row.id);
+      if (error) return "Could not update a sales invoice.";
+    }
+  }
+  return null;
+}
+
 /** Returns the created visit so the caller can go straight on to its guest list. */
 export async function createVisit(input: VisitInput): Promise<VisitActionResult & { visit?: VisitListItem }> {
   const { email } = await requireActiveTeamMember();
@@ -125,6 +174,11 @@ export async function createVisit(input: VisitInput): Promise<VisitActionResult 
     await supabase.from("visits").delete().eq("id", created.id);
     return { error: linkError };
   }
+  const salesError = await syncVisitSales(supabase, created.id, parsed.data.sales, email);
+  if (salesError) {
+    await supabase.from("visits").delete().eq("id", created.id);
+    return { error: salesError };
+  }
 
   // Sequences set up for this visit's program (e.g. "Rural Experience") are applied automatically.
   // Best-effort: the visit is already saved, and rules can be added from its Messaging dialog.
@@ -140,10 +194,10 @@ export async function createVisit(input: VisitInput): Promise<VisitActionResult 
     }
   }
 
-  const { data: linkedExperiences } = await supabase
-    .from("visit_experiences")
-    .select("experience_id")
-    .eq("visit_id", created.id);
+  const [{ data: linkedExperiences }, { data: savedSales }] = await Promise.all([
+    supabase.from("visit_experiences").select("experience_id").eq("visit_id", created.id),
+    supabase.from("visit_sales").select("id, channel, invoice_id, amount").eq("visit_id", created.id),
+  ]);
 
   revalidateVisits();
   return {
@@ -152,6 +206,7 @@ export async function createVisit(input: VisitInput): Promise<VisitActionResult 
       villageIds: [...new Set(parsed.data.villageIds)],
       experienceIds: (linkedExperiences ?? []).map((r) => r.experience_id),
       guestCount: 0,
+      sales: savedSales ?? [],
       primaryGuest: null,
     },
   };
@@ -175,6 +230,8 @@ export async function updateVisit(id: string, input: VisitInput): Promise<VisitA
 
   const linkError = await syncVisitLinks(supabase, id, parsed.data.villageIds, parsed.data.experienceIds);
   if (linkError) return { error: linkError };
+  const salesError = await syncVisitSales(supabase, id, parsed.data.sales, email);
+  if (salesError) return { error: salesError };
   revalidateVisits();
   return {};
 }
@@ -205,15 +262,6 @@ export async function setVisitDetailView(view: VisitDetailView): Promise<VisitAc
   const supabase = await createClient();
   const { error } = await supabase.auth.updateUser({ data: { visit_detail_view: view } });
   if (error) return { error: "Could not save your view preference." };
-  return {};
-}
-
-export async function deleteVisit(id: string): Promise<VisitActionResult> {
-  await requireActiveTeamMember();
-  const supabase = await createClient();
-  const { error } = await supabase.from("visits").delete().eq("id", id);
-  if (error) return { error: "Could not delete the visit." };
-  revalidateVisits();
   return {};
 }
 

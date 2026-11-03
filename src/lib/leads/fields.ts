@@ -14,7 +14,7 @@ export const VISIT_FIELDS = [
   { id: "visit_date", label: "Visit date" },
   { id: "start_time", label: "Start time" },
   { id: "end_time", label: "End time" },
-  { id: "poc_name", label: "Coordinator name" },
+  { id: "poc_name", label: "Facilitator name" },
   { id: "village_names", label: "Villages" },
   { id: "experience_names", label: "Experiences" },
   { id: "feedback_token", label: "Feedback link token (for a URL button)" },
