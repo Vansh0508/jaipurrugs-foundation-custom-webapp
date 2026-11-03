@@ -41,6 +41,7 @@ import { visitSchema, type VisitInput } from "@/lib/visits/schemas";
 import { timeInputValue } from "@/lib/visits/time";
 import type { VillageOption, VisitListItem, VisitReference } from "@/lib/visits/types";
 import { formatPhone } from "@/lib/mastra/phone";
+import { PhoneField, joinPhone, splitPhone } from "./phone-field";
 
 const NONE = "__none";
 
@@ -59,6 +60,9 @@ const STEPS: { title: string; fields: (keyof VisitInput)[] }[] = [
       "visitorCategory",
       "bookingChannel",
       "facilitatorId",
+      "pocGuestName",
+      "pocGuestPhone",
+      "pocGuestEmail",
       "partnerId",
       "headcount",
       "originPlace",
@@ -390,6 +394,11 @@ function VisitForm({
   const [endTime, setEndTime] = useState<Time | null>(() => toTime(visit?.end_time));
   const [visitorCategory, setVisitorCategory] = useState(visit?.visitor_category ?? "");
   const [bookingChannel, setBookingChannel] = useState(visit?.booking_channel ?? "");
+  const initialPocPhone = splitPhone(visit?.primaryGuest?.phone);
+  const [pocName, setPocName] = useState(visit?.primaryGuest?.name ?? "");
+  const [pocPhoneCode, setPocPhoneCode] = useState(initialPocPhone.code);
+  const [pocPhoneNumber, setPocPhoneNumber] = useState(initialPocPhone.number);
+  const [pocEmail, setPocEmail] = useState(visit?.primaryGuest?.email ?? "");
   const [facilitatorId, setFacilitatorId] = useState(visit?.facilitator_id ?? "");
   const [partnerId, setPartnerId] = useState(visit?.partner_id ?? "");
   const [headcount, setHeadcount] = useState(numberToText(visit?.headcount ?? null));
@@ -469,6 +478,9 @@ function VisitForm({
       endTime: fromTime(endTime),
       status: status as VisitInput["status"],
       facilitatorId,
+      pocGuestName: pocName,
+      pocGuestPhone: joinPhone(pocPhoneCode, pocPhoneNumber),
+      pocGuestEmail: pocEmail,
       partnerId,
       headcount,
       source,
@@ -493,6 +505,10 @@ function VisitForm({
 
   /** The first problem on the given steps, with the step it belongs to. */
   function findProblem(steps: number[]): { step: number; message: string } | null {
+    const pocNumber = pocPhoneNumber.trim();
+    if (steps.includes(0) && pocNumber && !/^[\d\s-]{6,20}$/.test(pocNumber)) {
+      return { step: 0, message: "Enter the primary POC's phone number using digits only." };
+    }
     const parsed = visitSchema.safeParse(buildInput());
     if (parsed.success) return null;
     for (const issue of parsed.error.issues) {
@@ -695,6 +711,32 @@ function VisitForm({
               value={partnerId}
               onChange={setPartnerId}
             />
+
+            <div className="grid gap-4 rounded-xl border border-border p-3 sm:col-span-2 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <p className="text-sm font-medium">Primary POC</p>
+                <p className="text-xs text-muted">
+                  The visit&apos;s point of contact. They are saved in Leads (matched by phone number) and added as
+                  the primary guest — the person who receives messages meant for the POC, like the referral
+                  request.
+                </p>
+              </div>
+              <TextField value={pocName} onChange={setPocName}>
+                <Label>Name</Label>
+                <Input placeholder="e.g. Priya Sharma" />
+              </TextField>
+              <PhoneField
+                code={pocPhoneCode}
+                label="Phone"
+                number={pocPhoneNumber}
+                onCodeChange={setPocPhoneCode}
+                onNumberChange={setPocPhoneNumber}
+              />
+              <TextField className="sm:col-span-2" type="email" value={pocEmail} onChange={setPocEmail}>
+                <Label>Email (optional)</Label>
+                <Input placeholder="name@example.com" />
+              </TextField>
+            </div>
 
             <TextField value={originPlace} onChange={setOriginPlace}>
               <Label>Coming from</Label>

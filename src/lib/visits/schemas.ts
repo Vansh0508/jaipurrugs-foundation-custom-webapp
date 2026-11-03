@@ -159,6 +159,13 @@ export const visitSchema = z
     startTime: optionalTime,
     endTime: optionalTime,
     status: z.enum(ids(VISIT_STATUSES)),
+    // The visit's primary point of contact: a lead (found or created by phone) set as the primary guest.
+    pocGuestName: optionalText(120),
+    pocGuestPhone: optionalText(30),
+    pocGuestEmail: z.preprocess(
+      (v) => (typeof v === "string" ? v.trim() : v),
+      z.union([z.literal(""), z.email("Enter a valid email address for the POC.").max(254)]).optional(),
+    ),
     // The JRF staff member who runs (hosts) the visit; their name and phone are copied onto
     // the visit by the database (see supabase/migrations/20261103*_facilitator*.sql).
     facilitatorId: optionalUuid,
@@ -181,6 +188,12 @@ export const visitSchema = z
   .superRefine((visit, ctx) => {
     if (visit.endDate && visit.endDate < visit.visitDate) {
       ctx.addIssue({ code: "custom", message: "The visit can't end before it starts.", path: ["endDate"] });
+    }
+    if (visit.pocGuestPhone && !visit.pocGuestName) {
+      ctx.addIssue({ code: "custom", message: "Enter the primary POC's name.", path: ["pocGuestName"] });
+    }
+    if (visit.pocGuestName && !visit.pocGuestPhone) {
+      ctx.addIssue({ code: "custom", message: "Enter the primary POC's phone number.", path: ["pocGuestPhone"] });
     }
     const seen = new Set<string>();
     for (const sale of visit.sales) {

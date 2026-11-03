@@ -200,7 +200,13 @@ export function validateDraft(draft: TemplateDraft): string[] {
   return errors;
 }
 
-/** The request body's `components` for Zernio, with Meta's example values. */
+/**
+ * The request body's `components` for Zernio, with Meta's example values.
+ * Zernio's create endpoint discriminates components on a lowercase `type`
+ * (header | body | footer | buttons), button `type` (quick_reply | url |
+ * phone_number) and header `format` — unlike its list endpoint, which
+ * returns uppercase.
+ */
 export function draftToZernioComponents(draft: TemplateDraft) {
   const summary = summarizeDraft(draft);
   const example = (key: string) => draft.variables[key]?.example.trim() ?? "";
@@ -211,8 +217,8 @@ export function draftToZernioComponents(draft: TemplateDraft) {
   if (header) {
     const vars = summary.variables.filter((v) => v.source === "header");
     components.push({
-      type: "HEADER",
-      format: "TEXT",
+      type: "header",
+      format: "text",
       text: header,
       ...(vars.length
         ? {
@@ -226,7 +232,7 @@ export function draftToZernioComponents(draft: TemplateDraft) {
 
   const bodyVars = summary.variables.filter((v) => v.source === "body");
   components.push({
-    type: "BODY",
+    type: "body",
     text: draft.bodyText.trim(),
     ...(bodyVars.length
       ? {
@@ -238,19 +244,19 @@ export function draftToZernioComponents(draft: TemplateDraft) {
   });
 
   const footer = draft.footerText.trim();
-  if (footer) components.push({ type: "FOOTER", text: footer });
+  if (footer) components.push({ type: "footer", text: footer });
 
   if (draft.buttons.length > 0) {
     components.push({
-      type: "BUTTONS",
+      type: "buttons",
       buttons: draft.buttons.map((button, i) => {
-        if (button.type === "QUICK_REPLY") return { type: "QUICK_REPLY", text: button.text.trim() };
+        if (button.type === "QUICK_REPLY") return { type: "quick_reply", text: button.text.trim() };
         if (button.type === "PHONE_NUMBER") {
-          return { type: "PHONE_NUMBER", text: button.text.trim(), phone_number: button.phoneNumber.replace(/\s/g, "") };
+          return { type: "phone_number", text: button.text.trim(), phone_number: button.phoneNumber.replace(/\s/g, "") };
         }
         const urlVar = summary.variables.find((v) => v.source === "button" && v.buttonIndex === i);
         return {
-          type: "URL",
+          type: "url",
           text: button.text.trim(),
           url: button.url,
           ...(urlVar ? { example: [button.url.replace(VARIABLE_PATTERN, example(urlVar.key))] } : {}),

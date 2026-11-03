@@ -151,6 +151,22 @@ async function syncVisitSales(
   return null;
 }
 
+/** Saves the POC typed in the visit form, if one was given. Clearing the fields leaves the current POC alone. */
+function applyPoc(
+  supabase: SupabaseServerClient,
+  visitId: string,
+  data: ReturnType<typeof visitSchema.parse>,
+  createdBy: string,
+) {
+  if (!data.pocGuestPhone || !data.pocGuestName) return Promise.resolve(null);
+  return savePrimaryPoc(
+    supabase,
+    visitId,
+    { name: data.pocGuestName, phone: data.pocGuestPhone, email: blankToNull(data.pocGuestEmail) },
+    createdBy,
+  );
+}
+
 /** Returns the created visit so the caller can go straight on to its guest list. */
 export async function createVisit(input: VisitInput): Promise<VisitActionResult & { visit?: VisitListItem }> {
   const { email } = await requireActiveTeamMember();
@@ -178,6 +194,11 @@ export async function createVisit(input: VisitInput): Promise<VisitActionResult 
   if (salesError) {
     await supabase.from("visits").delete().eq("id", created.id);
     return { error: salesError };
+  }
+  const pocError = await applyPoc(supabase, created.id, parsed.data, email);
+  if (pocError) {
+    await supabase.from("visits").delete().eq("id", created.id);
+    return { error: pocError };
   }
 
   // Sequences set up for this visit's program (e.g. "Rural Experience") are applied automatically.
@@ -232,6 +253,8 @@ export async function updateVisit(id: string, input: VisitInput): Promise<VisitA
   if (linkError) return { error: linkError };
   const salesError = await syncVisitSales(supabase, id, parsed.data.sales, email);
   if (salesError) return { error: salesError };
+  const pocError = await applyPoc(supabase, id, parsed.data, email);
+  if (pocError) return { error: pocError };
   revalidateVisits();
   return {};
 }
@@ -336,6 +359,79 @@ export async function searchLeadsForVisit(visitId: string, query: string): Promi
   return (data ?? []).filter((lead) => !exclude.has(lead.id)).slice(0, 8);
 }
 
+/**
+ * The lead for a phone number, created when there isn't one (so every guest and POC is a row in Leads).
+ * An existing lead keeps its name; a missing name or email is filled in.
+ */
+async function findOrCreateLead(
+  supabase: SupabaseServerClient,
+  input: { name: string; phone: string; email: string | null },
+): Promise<{ leadId: string } | { error: string }> {
+  const normalized = normalizePhone(input.phone);
+  if (!normalized) return { error: "Enter a valid phone number (at least 8 digits)." };
+
+  const { data: existing } = await supabase
+    .from("leads")
+    .select("id, name, attributes")
+    .eq("phone_normalized", normalized)
+    .maybeSingle();
+
+  if (!existing) {
+    const { data: created, error } = await supabase
+      .from("leads")
+      .insert({
+        phone: input.phone,
+        name: input.name,
+        source: "manual",
+        attributes: input.email ? { email: input.email } : {},
+      })
+      .select("id")
+      .single();
+    if (error || !created) return { error: "Could not create the contact." };
+    return { leadId: created.id };
+  }
+
+  const attributes = (existing.attributes ?? {}) as Record<string, Json>;
+  const update: { name?: string; attributes?: Record<string, Json> } = {};
+  if (!existing.name) update.name = input.name;
+  if (input.email && attributes.email !== input.email) update.attributes = { ...attributes, email: input.email };
+  if (update.name || update.attributes) await supabase.from("leads").update(update).eq("id", existing.id);
+  return { leadId: existing.id };
+}
+
+/** Makes the entered person (a lead, found or created by phone) the visit's primary guest. */
+async function savePrimaryPoc(
+  supabase: SupabaseServerClient,
+  visitId: string,
+  poc: { name: string; phone: string; email: string | null },
+  createdBy: string,
+): Promise<string | null> {
+  const found = await findOrCreateLead(supabase, poc);
+  if ("error" in found) return found.error;
+
+  const { data: current } = await supabase
+    .from("visit_guests")
+    .select("id, lead_id, is_primary")
+    .eq("visit_id", visitId);
+  const mine = (current ?? []).find((g) => g.lead_id === found.leadId);
+  if (mine?.is_primary) return null;
+
+  // One primary guest per visit (a partial unique index), so demote the current one first.
+  const { error: demoteError } = await supabase
+    .from("visit_guests")
+    .update({ is_primary: false })
+    .eq("visit_id", visitId)
+    .eq("is_primary", true);
+  if (demoteError) return "Could not set the primary POC.";
+
+  const { error } = mine
+    ? await supabase.from("visit_guests").update({ is_primary: true }).eq("id", mine.id)
+    : await supabase
+        .from("visit_guests")
+        .insert({ visit_id: visitId, lead_id: found.leadId, created_by: createdBy, is_primary: true });
+  return error ? "Could not set the primary POC." : null;
+}
+
 /** The first guest added to a visit becomes its primary POC; staff can change it after. */
 async function insertGuest(
   supabase: SupabaseServerClient,
@@ -382,34 +478,13 @@ export async function addNewGuest(
   if (!normalized) return { error: "Enter a valid phone number (at least 8 digits)." };
 
   const supabase = await createClient();
-  const guestEmail = blankToNull(parsed.data.email);
-
-  let { data: lead } = await supabase
-    .from("leads")
-    .select("id, name, attributes")
-    .eq("phone_normalized", normalized)
-    .maybeSingle();
-
-  if (!lead) {
-    const { data: created, error } = await supabase
-      .from("leads")
-      .insert({
-        phone: parsed.data.phone,
-        name: parsed.data.name,
-        source: "manual",
-        attributes: guestEmail ? { email: guestEmail } : {},
-      })
-      .select("id, name, attributes")
-      .single();
-    if (error || !created) return { error: "Could not create the contact." };
-    lead = created;
-  } else {
-    const attributes = (lead.attributes ?? {}) as Record<string, Json>;
-    const update: { name?: string; attributes?: Record<string, Json> } = {};
-    if (!lead.name) update.name = parsed.data.name;
-    if (guestEmail && attributes.email !== guestEmail) update.attributes = { ...attributes, email: guestEmail };
-    if (update.name || update.attributes) await supabase.from("leads").update(update).eq("id", lead.id);
-  }
+  const found = await findOrCreateLead(supabase, {
+    name: parsed.data.name,
+    phone: parsed.data.phone,
+    email: blankToNull(parsed.data.email),
+  });
+  if ("error" in found) return found;
+  const lead = { id: found.leadId };
 
   const result = await insertGuest(supabase, visitId, lead.id, email);
   if (result.error) return result;
